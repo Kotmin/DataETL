@@ -20,8 +20,8 @@ MSSQL_STATUS=$(docker inspect --format='{{.State.Health.Status}}' \
 [ "${PG_STATUS}" != "healthy" ] && ISSUES+=("postgres: ${PG_STATUS}")
 [ "${MSSQL_STATUS}" != "healthy" ] && ISSUES+=("sqlserver: ${MSSQL_STATUS}")
 
-pgrep -f "airflow webserver" > /dev/null 2>&1 || ISSUES+=("airflow webserver: DOWN")
-pgrep -f "airflow scheduler"  > /dev/null 2>&1 || ISSUES+=("airflow scheduler: DOWN")
+curl -s http://localhost:8080/health > /dev/null 2>&1 || ISSUES+=("airflow api-server: DOWN")
+pgrep -f "airflow scheduler\|airflow standalone" > /dev/null 2>&1 || ISSUES+=("airflow scheduler: DOWN")
 
 if [ ${#ISSUES[@]} -eq 0 ]; then
     echo "${TIMESTAMP} [OK] All services healthy"

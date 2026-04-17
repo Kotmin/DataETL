@@ -3,6 +3,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENV="${REPO_ROOT}/.venv/bin"
+LOG="${REPO_ROOT}/airflow/logs/standalone.log"
 
 if [ ! -f "${REPO_ROOT}/.env" ]; then
     echo "ERROR: .env not found. Run: cp ${REPO_ROOT}/.env.example ${REPO_ROOT}/.env"
@@ -21,11 +22,21 @@ export AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS=True
 
 "${VENV}/airflow" db migrate
 
-echo "Starting Airflow webserver on http://localhost:8080 ..."
-"${VENV}/airflow" webserver --port 8080 --daemon
+mkdir -p "${REPO_ROOT}/airflow/logs"
 
-echo "Starting Airflow scheduler ..."
-"${VENV}/airflow" scheduler --daemon
+echo "Starting Airflow standalone (api-server + scheduler + triggerer)..."
+nohup "${VENV}/airflow" standalone > "${LOG}" 2>&1 &
+AIRFLOW_PID=$!
+echo "${AIRFLOW_PID}" > "${REPO_ROOT}/airflow/airflow.pid"
 
-echo "Airflow running. Logs: ${REPO_ROOT}/airflow/logs/"
-echo "Stop with: pkill -f 'airflow webserver' && pkill -f 'airflow scheduler'"
+echo "Waiting for API server to be ready..."
+for i in $(seq 1 30); do
+    curl -s http://localhost:8080/health > /dev/null 2>&1 && break
+    sleep 2
+done
+
+echo ""
+echo "Airflow running  (PID ${AIRFLOW_PID})"
+echo "  UI:   http://localhost:8080"
+echo "  Logs: ${LOG}"
+echo "  Stop: kill \$(cat ${REPO_ROOT}/airflow/airflow.pid)"
