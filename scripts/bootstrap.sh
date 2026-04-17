@@ -61,11 +61,9 @@ export AIRFLOW_HOME="${REPO_ROOT}/airflow"
 export AIRFLOW__CORE__DAGS_FOLDER="${REPO_ROOT}/airflow/dags"
 export AIRFLOW__CORE__LOAD_EXAMPLES=False
 export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN="sqlite:////${REPO_ROOT}/airflow/airflow.db"
+export AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS=True
 
 "${VENV}/bin/airflow" db migrate 2>&1 | tail -5
-"${VENV}/bin/airflow" users create \
-    --username admin --password admin --role Admin \
-    --firstname Lab --lastname Admin --email lab@local 2>/dev/null || true
 
 # ── 6. Verify connections ───────────────────────────────────────────────────
 echo "[6/6] Verifying database connections..."
