@@ -1,4 +1,8 @@
-# Source-to-Target Mapping — DimProduct
+# Source-to-Target Mapping
+
+---
+
+## DimProduct
 
 ## Overview
 
@@ -88,3 +92,118 @@ LEFT JOIN Production.ProductCategory AS pc
 | `int` | `INTEGER` |
 | `nvarchar(n)` | `VARCHAR(n)` |
 | `NULL` (FK) | `NULL` |
+
+---
+
+## DimDate
+
+| Attribute | Value |
+|---|---|
+| Target table | `dim.dim_date` |
+| Source system | Generated (no DB source) |
+| Load pattern | Full reload (TRUNCATE + INSERT) |
+| Range | 2022-01-01 to 2026-12-31 |
+
+### Column Mapping
+
+| Target Column | Type | Source | Transform |
+|---|---|---|---|
+| `date_key` | INTEGER NOT NULL PK | Computed | `YYYYMMDD` integer from `full_date` |
+| `full_date` | DATE NOT NULL | Generated | Sequential calendar day |
+| `year` | SMALLINT NOT NULL | Generated | `date.year` |
+| `quarter` | SMALLINT NOT NULL | Generated | `(month - 1) // 3 + 1` |
+| `month` | SMALLINT NOT NULL | Generated | `date.month` |
+| `month_name` | VARCHAR(9) NOT NULL | Generated | Lookup from month number |
+| `week_of_year` | SMALLINT NOT NULL | Generated | `strftime("%W")` — Monday-based week 0 |
+| `day_of_month` | SMALLINT NOT NULL | Generated | `date.day` |
+| `day_of_week` | SMALLINT NOT NULL | Generated | `weekday() + 1` (1=Monday, 7=Sunday) |
+| `day_name` | VARCHAR(9) NOT NULL | Generated | Lookup from weekday number |
+| `is_weekend` | BOOLEAN NOT NULL | Generated | `weekday() >= 5` |
+
+---
+
+## DimTerritory
+
+| Attribute | Value |
+|---|---|
+| Target table | `dim.dim_territory` |
+| Source system | SQL Server — AdventureWorks2025 |
+| Load pattern | Full reload (TRUNCATE + INSERT) |
+
+### Column Mapping
+
+| Target Column | Type | Source Table | Source Column | Transform |
+|---|---|---|---|---|
+| `territory_key` | INTEGER NOT NULL PK | `Sales.SalesTerritory` | `TerritoryID` | Direct cast |
+| `territory_name` | VARCHAR(50) NOT NULL | `Sales.SalesTerritory` | `Name` | TRIM |
+| `country_region_code` | VARCHAR(3) NOT NULL | `Sales.SalesTerritory` | `CountryRegionCode` | TRIM |
+| `region_group` | VARCHAR(50) NOT NULL | `Sales.SalesTerritory` | `[Group]` | TRIM |
+
+---
+
+## DimCustomer
+
+| Attribute | Value |
+|---|---|
+| Target table | `dim.dim_customer` |
+| Source system | SQL Server — AdventureWorks2025 |
+| Load pattern | Full reload (TRUNCATE + INSERT) |
+
+### Column Mapping
+
+| Target Column | Type | Source Table | Source Column | Transform |
+|---|---|---|---|---|
+| `customer_key` | INTEGER NOT NULL PK | `Sales.Customer` | `CustomerID` | Direct cast |
+| `account_number` | VARCHAR(10) NOT NULL | `Sales.Customer` | `AccountNumber` | TRIM |
+| `first_name` | VARCHAR(50) NULLABLE | `Person.Person` | `FirstName` | NULL if no Person row (store-only customers) |
+| `last_name` | VARCHAR(50) NULLABLE | `Person.Person` | `LastName` | NULL if no Person row |
+| `full_name` | VARCHAR(101) NULLABLE | Computed | `COALESCE(FirstName+' ','')+COALESCE(LastName,'')` | NULL if no Person row |
+| `territory_key` | INTEGER NULLABLE | `Sales.Customer` | `TerritoryID` | NULL if unassigned |
+| `territory_name` | VARCHAR(50) NULLABLE | `Sales.SalesTerritory` | `Name` | NULL if no territory match |
+
+### Join Strategy
+
+```sql
+Sales.Customer AS c
+LEFT JOIN Person.Person AS p ON c.PersonID = p.BusinessEntityID
+LEFT JOIN Sales.SalesTerritory AS st ON c.TerritoryID = st.TerritoryID
+```
+
+---
+
+## FactOnlineSales
+
+| Attribute | Value |
+|---|---|
+| Target table | `fact.fact_online_sales` |
+| Source system | SQL Server — AdventureWorks2025 |
+| Load pattern | Full reload (TRUNCATE + INSERT) |
+| Filter | `OnlineOrderFlag = 1` (excludes in-store orders) |
+
+### Column Mapping
+
+| Target Column | Type | Source Table | Source Column | Transform |
+|---|---|---|---|---|
+| `sales_order_key` | BIGINT NOT NULL PK | `Sales.SalesOrderDetail` | `SalesOrderDetailID` | Direct cast |
+| `order_date_key` | INTEGER NOT NULL | `Sales.SalesOrderHeader` | `OrderDate` | `YYYYMMDD` integer — FK to dim.dim_date |
+| `customer_key` | INTEGER NULLABLE | `Sales.SalesOrderHeader` | `CustomerID` | FK to dim.dim_customer, NULL for guest orders |
+| `product_key` | INTEGER NOT NULL | `Sales.SalesOrderDetail` | `ProductID` | FK to dim.dim_product |
+| `territory_key` | INTEGER NULLABLE | `Sales.SalesOrderHeader` | `TerritoryID` | FK to dim.dim_territory |
+| `order_qty` | SMALLINT NOT NULL | `Sales.SalesOrderDetail` | `OrderQty` | Direct cast |
+| `unit_price` | NUMERIC(19,4) NOT NULL | `Sales.SalesOrderDetail` | `UnitPrice` | Direct cast |
+| `unit_price_discount` | NUMERIC(19,4) NOT NULL | `Sales.SalesOrderDetail` | `UnitPriceDiscount` | Direct cast, defaults to 0 |
+| `line_total` | NUMERIC(19,4) NOT NULL | `Sales.SalesOrderDetail` | `LineTotal` | Direct cast |
+| `sub_total` | NUMERIC(19,4) NULLABLE | `Sales.SalesOrderHeader` | `SubTotal` | Header-level, shared across detail rows |
+| `tax_amt` | NUMERIC(19,4) NULLABLE | `Sales.SalesOrderHeader` | `TaxAmt` | Header-level |
+| `freight` | NUMERIC(19,4) NULLABLE | `Sales.SalesOrderHeader` | `Freight` | Header-level |
+| `total_due` | NUMERIC(19,4) NULLABLE | `Sales.SalesOrderHeader` | `TotalDue` | Header-level |
+
+### Join Strategy
+
+```sql
+Sales.SalesOrderHeader AS h
+JOIN Sales.SalesOrderDetail AS d ON h.SalesOrderID = d.SalesOrderID
+WHERE h.OnlineOrderFlag = 1
+```
+
+**Note:** Header-level financial fields (SubTotal, TaxAmt, Freight, TotalDue) repeat across detail rows for the same order. This is intentional for teaching aggregation queries.
