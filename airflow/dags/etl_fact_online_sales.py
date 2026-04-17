@@ -48,6 +48,15 @@ def extract(**context):
 
 def transform(**context):
     raw_rows = context["ti"].xcom_pull(task_ids="extract_fact_online_sales", key="raw_rows")
+
+    pg = _pg_conn()
+    try:
+        with pg.cursor() as cur:
+            cur.execute("SELECT payment_method_name, payment_method_key FROM dim.dim_payment_method")
+            pm_lookup = {name: key for name, key in cur.fetchall()}
+    finally:
+        pg.close()
+
     transformed = []
     for row in raw_rows:
         order_date = row["OrderDate"]
@@ -56,21 +65,27 @@ def transform(**context):
         elif hasattr(order_date, "date"):
             order_date = order_date.date()
         date_key = int(order_date.strftime("%Y%m%d"))
+
+        card_type = row.get("CardType") or "None"
         transformed.append(
             {
-                "sales_order_key": row["SalesOrderKey"],
-                "order_date_key": date_key,
-                "customer_key": row["CustomerID"],
-                "product_key": row["ProductID"],
-                "territory_key": row["TerritoryID"],
-                "order_qty": row["OrderQty"],
-                "unit_price": row["UnitPrice"],
+                "sales_order_key":     row["SalesOrderKey"],
+                "order_date_key":      date_key,
+                "customer_key":        row["CustomerID"],
+                "product_key":         row["ProductID"],
+                "territory_key":       row["TerritoryID"],
+                "order_channel_key":   1,
+                "payment_method_key":  pm_lookup.get(card_type),
+                "geography_key":       row["ShipToAddressID"],
+                "delivery_method_key": row["ShipMethodID"],
+                "order_qty":           row["OrderQty"],
+                "unit_price":          row["UnitPrice"],
                 "unit_price_discount": row["UnitPriceDiscount"],
-                "line_total": float(row["LineTotal"]),
-                "sub_total": float(row["SubTotal"]) if row["SubTotal"] is not None else None,
-                "tax_amt": float(row["TaxAmt"]) if row["TaxAmt"] is not None else None,
-                "freight": float(row["Freight"]) if row["Freight"] is not None else None,
-                "total_due": float(row["TotalDue"]) if row["TotalDue"] is not None else None,
+                "line_total":          float(row["LineTotal"]),
+                "sub_total":           float(row["SubTotal"]) if row["SubTotal"] is not None else None,
+                "tax_amt":             float(row["TaxAmt"]) if row["TaxAmt"] is not None else None,
+                "freight":             float(row["Freight"]) if row["Freight"] is not None else None,
+                "total_due":           float(row["TotalDue"]) if row["TotalDue"] is not None else None,
             }
         )
     context["ti"].xcom_push(key="transformed_rows", value=transformed)
@@ -86,13 +101,17 @@ def load(**context):
                 """
                 INSERT INTO fact.fact_online_sales
                     (sales_order_key, order_date_key, customer_key, product_key,
-                     territory_key, order_qty, unit_price, unit_price_discount,
-                     line_total, sub_total, tax_amt, freight, total_due)
+                     territory_key, order_channel_key, payment_method_key,
+                     geography_key, delivery_method_key,
+                     order_qty, unit_price, unit_price_discount, line_total,
+                     sub_total, tax_amt, freight, total_due)
                 VALUES
                     (%(sales_order_key)s, %(order_date_key)s, %(customer_key)s,
-                     %(product_key)s, %(territory_key)s, %(order_qty)s,
-                     %(unit_price)s, %(unit_price_discount)s, %(line_total)s,
-                     %(sub_total)s, %(tax_amt)s, %(freight)s, %(total_due)s)
+                     %(product_key)s, %(territory_key)s, %(order_channel_key)s,
+                     %(payment_method_key)s, %(geography_key)s, %(delivery_method_key)s,
+                     %(order_qty)s, %(unit_price)s, %(unit_price_discount)s,
+                     %(line_total)s, %(sub_total)s, %(tax_amt)s,
+                     %(freight)s, %(total_due)s)
                 """,
                 rows,
             )
