@@ -3,6 +3,9 @@
 .venv/
 .env
 airflow/airflow.db
+airflow/airflow.db-shm
+airflow/airflow.db-wal
+airflow/airflow.pid
 airflow/logs/
 airflow/plugins/
 .claude/ralph-loop.local.md
