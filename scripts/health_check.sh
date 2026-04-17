@@ -12,10 +12,10 @@ if [ -f "${REPO_ROOT}/.env" ]; then
 fi
 
 PG_STATUS=$(docker inspect --format='{{.State.Health.Status}}' \
-    "$(docker compose -f "${REPO_ROOT}/docker/docker-compose.yml" ps -q postgres 2>/dev/null)" 2>/dev/null || echo "missing")
+    "$(docker compose -f "${REPO_ROOT}/docker/docker-compose.yml" --env-file "${REPO_ROOT}/.env" ps -q postgres 2>/dev/null)" 2>/dev/null || echo "missing")
 
 MSSQL_STATUS=$(docker inspect --format='{{.State.Health.Status}}' \
-    "$(docker compose -f "${REPO_ROOT}/docker/docker-compose.yml" ps -q sqlserver 2>/dev/null)" 2>/dev/null || echo "missing")
+    "$(docker compose -f "${REPO_ROOT}/docker/docker-compose.yml" --env-file "${REPO_ROOT}/.env" ps -q sqlserver 2>/dev/null)" 2>/dev/null || echo "missing")
 
 [ "${PG_STATUS}" != "healthy" ] && ISSUES+=("postgres: ${PG_STATUS}")
 [ "${MSSQL_STATUS}" != "healthy" ] && ISSUES+=("sqlserver: ${MSSQL_STATUS}")

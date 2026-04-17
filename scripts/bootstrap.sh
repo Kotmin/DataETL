@@ -46,12 +46,14 @@ source "${REPO_ROOT}/.env"
 set +a
 
 # ── 4. Docker containers ────────────────────────────────────────────────────
-echo "[4/6] Starting Docker containers..."
-docker compose -f "${REPO_ROOT}/docker/docker-compose.yml" up -d
+COMPOSE="docker compose -f ${REPO_ROOT}/docker/docker-compose.yml --env-file ${REPO_ROOT}/.env"
 
-echo "  Waiting for containers to be healthy (SQL Server restore may take ~90s)..."
-docker compose -f "${REPO_ROOT}/docker/docker-compose.yml" wait sqlserver postgres 2>/dev/null || \
-    docker compose -f "${REPO_ROOT}/docker/docker-compose.yml" up -d --wait 2>/dev/null || true
+echo "[4/6] Starting Docker containers..."
+${COMPOSE} up -d
+
+echo "  Waiting for containers to be healthy (SQL Server restore may take ~120s)..."
+${COMPOSE} wait sqlserver postgres 2>/dev/null || \
+    ${COMPOSE} up -d --wait 2>/dev/null || true
 
 # ── 5. Airflow initialisation ───────────────────────────────────────────────
 echo "[5/6] Initialising Airflow..."
