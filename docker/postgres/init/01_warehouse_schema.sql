@@ -46,12 +46,49 @@ CREATE TABLE IF NOT EXISTS dim.dim_territory (
     CONSTRAINT pk_dim_territory PRIMARY KEY (territory_key)
 );
 
+CREATE TABLE IF NOT EXISTS dim.dim_order_channel (
+    order_channel_key   INTEGER      NOT NULL,
+    channel_name        VARCHAR(20)  NOT NULL,
+    online_flag         BOOLEAN      NOT NULL,
+    CONSTRAINT pk_dim_order_channel PRIMARY KEY (order_channel_key)
+);
+
+CREATE TABLE IF NOT EXISTS dim.dim_payment_method (
+    payment_method_key  INTEGER      NOT NULL,
+    payment_method_name VARCHAR(50)  NOT NULL,
+    CONSTRAINT pk_dim_payment_method PRIMARY KEY (payment_method_key)
+);
+
+CREATE TABLE IF NOT EXISTS dim.dim_geography (
+    geography_key       INTEGER      NOT NULL,
+    address_line1       VARCHAR(60),
+    city                VARCHAR(30)  NOT NULL,
+    state_province_code VARCHAR(3),
+    state_province_name VARCHAR(50),
+    country_region_code VARCHAR(3)   NOT NULL,
+    country_name        VARCHAR(50)  NOT NULL,
+    postal_code         VARCHAR(15),
+    CONSTRAINT pk_dim_geography PRIMARY KEY (geography_key)
+);
+
+CREATE TABLE IF NOT EXISTS dim.dim_delivery_method (
+    delivery_method_key     INTEGER         NOT NULL,
+    delivery_method_name    VARCHAR(50)     NOT NULL,
+    ship_base               NUMERIC(19,4),
+    ship_rate               NUMERIC(19,4),
+    CONSTRAINT pk_dim_delivery_method PRIMARY KEY (delivery_method_key)
+);
+
 CREATE TABLE IF NOT EXISTS fact.fact_online_sales (
     sales_order_key     BIGINT          NOT NULL,
     order_date_key      INTEGER         NOT NULL,
     customer_key        INTEGER,
     product_key         INTEGER         NOT NULL,
     territory_key       INTEGER,
+    order_channel_key   INTEGER         NOT NULL DEFAULT 1,
+    payment_method_key  INTEGER,
+    geography_key       INTEGER,
+    delivery_method_key INTEGER,
     order_qty           SMALLINT        NOT NULL,
     unit_price          NUMERIC(19,4)   NOT NULL,
     unit_price_discount NUMERIC(19,4)   NOT NULL DEFAULT 0,
