@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import json
 import os
+from datetime import datetime
 from pathlib import Path
 
 import pyodbc
 import psycopg2
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from airflow.utils.dates import days_ago
 
 REPO_ROOT = Path(__file__).parents[2]
 EXTRACT_SQL = (REPO_ROOT / "sql" / "source" / "extract_dim_product.sql").read_text()
@@ -95,7 +94,7 @@ def load(**context):
 with DAG(
     dag_id="etl_dim_product",
     schedule=None,
-    start_date=days_ago(1),
+    start_date=datetime(2025, 1, 1),
     catchup=False,
     tags=["dim", "product", "poc"],
 ) as dag:
