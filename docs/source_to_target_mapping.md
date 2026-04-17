@@ -207,3 +207,96 @@ WHERE h.OnlineOrderFlag = 1
 ```
 
 **Note:** Header-level financial fields (SubTotal, TaxAmt, Freight, TotalDue) repeat across detail rows for the same order. This is intentional for teaching aggregation queries.
+
+---
+
+## DimOrderChannel
+
+| Attribute | Value |
+|---|---|
+| Target table | `dim.dim_order_channel` |
+| Source system | Seeded (no DB extract) |
+| Load pattern | Full reload (TRUNCATE + INSERT) |
+
+### Column Mapping
+
+| Target Column | Type | Source | Transform |
+|---|---|---|---|
+| `order_channel_key` | INTEGER NOT NULL PK | Seeded | 1 = Online, 2 = In-Store |
+| `channel_name` | VARCHAR(20) NOT NULL | Seeded | "Online" or "In-Store" |
+| `online_flag` | BOOLEAN NOT NULL | Seeded | True for Online, False for In-Store |
+
+**Note:** All rows in `fact.fact_online_sales` have `order_channel_key = 1` because the extract filters `OnlineOrderFlag = 1`. The In-Store row exists for completeness.
+
+---
+
+## DimDeliveryMethod
+
+| Attribute | Value |
+|---|---|
+| Target table | `dim.dim_delivery_method` |
+| Source system | SQL Server — AdventureWorks2025 |
+| Load pattern | Full reload (TRUNCATE + INSERT) |
+
+### Column Mapping
+
+| Target Column | Type | Source Table | Source Column | Transform |
+|---|---|---|---|---|
+| `delivery_method_key` | INTEGER NOT NULL PK | `Purchasing.ShipMethod` | `ShipMethodID` | Natural key — no surrogate |
+| `delivery_method_name` | VARCHAR(50) NOT NULL | `Purchasing.ShipMethod` | `Name` | TRIM |
+| `ship_base` | NUMERIC(19,4) | `Purchasing.ShipMethod` | `ShipBase` | Direct cast |
+| `ship_rate` | NUMERIC(19,4) | `Purchasing.ShipMethod` | `ShipRate` | Direct cast |
+
+Maps to `fact.fact_online_sales.delivery_method_key` via `SalesOrderHeader.ShipMethodID`.
+
+---
+
+## DimPaymentMethod
+
+| Attribute | Value |
+|---|---|
+| Target table | `dim.dim_payment_method` |
+| Source system | SQL Server — AdventureWorks2025 |
+| Load pattern | Full reload (TRUNCATE + INSERT) |
+
+### Column Mapping
+
+| Target Column | Type | Source Table | Source Column | Transform |
+|---|---|---|---|---|
+| `payment_method_key` | INTEGER NOT NULL PK | `Sales.CreditCard` | `CardType` (DISTINCT) | `ROW_NUMBER() OVER (ORDER BY CardType)`; key 0 = 'None' for orders without a card |
+| `payment_method_name` | VARCHAR(50) NOT NULL | `Sales.CreditCard` | `CardType` | Direct value; 'None' for missing |
+
+**FK resolution in fact:** The `transform` step of `etl_fact_online_sales` queries `dim.dim_payment_method` in PostgreSQL at runtime to build a name→key lookup dict. This means `etl_dim_payment_method` must be run before `etl_fact_online_sales`.
+
+---
+
+## DimGeography
+
+| Attribute | Value |
+|---|---|
+| Target table | `dim.dim_geography` |
+| Source system | SQL Server — AdventureWorks2025 |
+| Load pattern | Full reload (TRUNCATE + INSERT) |
+
+### Column Mapping
+
+| Target Column | Type | Source Table | Source Column | Transform |
+|---|---|---|---|---|
+| `geography_key` | INTEGER NOT NULL PK | `Person.Address` | `AddressID` | Natural key — no surrogate |
+| `address_line1` | VARCHAR(60) | `Person.Address` | `AddressLine1` | Direct |
+| `city` | VARCHAR(30) NOT NULL | `Person.Address` | `City` | TRIM |
+| `state_province_code` | VARCHAR(3) | `Person.StateProvince` | `StateProvinceCode` | Direct |
+| `state_province_name` | VARCHAR(50) | `Person.StateProvince` | `Name` | Direct |
+| `country_region_code` | VARCHAR(3) NOT NULL | `Person.StateProvince` | `CountryRegionCode` | TRIM |
+| `country_name` | VARCHAR(50) NOT NULL | `Person.CountryRegion` | `Name` | TRIM |
+| `postal_code` | VARCHAR(15) | `Person.Address` | `PostalCode` | Direct |
+
+### Join Strategy
+
+```sql
+Person.Address AS a
+JOIN Person.StateProvince AS sp ON a.StateProvinceID   = sp.StateProvinceID
+JOIN Person.CountryRegion AS cr ON sp.CountryRegionCode = cr.CountryRegionCode
+```
+
+Maps to `fact.fact_online_sales.geography_key` via `SalesOrderHeader.ShipToAddressID`.
