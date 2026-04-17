@@ -7,6 +7,14 @@
     "playwright": {
       "command": "npx",
       "args": ["@playwright/mcp@latest"]
+    },
+    "sql-query": {
+      "command": "/home/kotmin/Coding/DataETL/.venv/bin/python",
+      "args": ["/home/kotmin/Coding/DataETL/tools/sql_query/server.py"],
+      "env": {
+        "MSSQL_CONN": "DRIVER={ODBC Driver 18 for SQL Server};SERVER=localhost,1433;DATABASE=AdventureWorks2025;UID=sa;PWD=YourStrong!Pass1",
+        "PG_CONN": "postgresql://warehouse:warehouse@localhost:5432/warehouse"
+      }
     }
   }
 }
