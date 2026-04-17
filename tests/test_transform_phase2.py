@@ -1,12 +1,13 @@
 import sys
 from datetime import datetime, date
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "airflow" / "dags"))
 
 from etl_dim_territory import transform as _transform_territory
 from etl_dim_customer import transform as _transform_customer
-from etl_fact_online_sales import transform as _transform_fact
+import etl_fact_online_sales as _fact_module
 
 
 class _FakeXCom:
@@ -20,9 +21,25 @@ class _FakeXCom:
         self._pushed = (key, value)
 
 
+_PM_LOOKUP = {"None": 0, "ColonialVoice": 1, "Distinguish": 2, "SuperiorCard": 3, "Vista": 4}
+
+
 def _run(fn, raw_rows):
     ti = _FakeXCom(raw_rows)
     fn(**{"ti": ti})
+    assert ti._pushed[0] == "transformed_rows"
+    return ti._pushed[1]
+
+
+def _run_fact(raw_rows):
+    mock_cursor = MagicMock()
+    mock_cursor.fetchall.return_value = list(_PM_LOOKUP.items())
+    mock_conn = MagicMock()
+    mock_conn.cursor.return_value.__enter__ = lambda s: mock_cursor
+    mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
+    ti = _FakeXCom(raw_rows)
+    with patch.object(_fact_module, "_pg_conn", return_value=mock_conn):
+        _fact_module.transform(**{"ti": ti})
     assert ti._pushed[0] == "transformed_rows"
     return ti._pushed[1]
 
@@ -60,6 +77,9 @@ _FACT_RAW = [
         "CustomerID": 11000,
         "ProductID": 776,
         "TerritoryID": 1,
+        "ShipToAddressID": 1001,
+        "ShipMethodID": 2,
+        "CardType": "Vista",
         "OrderQty": 1,
         "UnitPrice": 2024.994,
         "UnitPriceDiscount": 0.0,
@@ -75,6 +95,9 @@ _FACT_RAW = [
         "CustomerID": None,
         "ProductID": 777,
         "TerritoryID": None,
+        "ShipToAddressID": None,
+        "ShipMethodID": 1,
+        "CardType": "None",
         "OrderQty": 2,
         "UnitPrice": 100.0,
         "UnitPriceDiscount": 0.0,
@@ -134,19 +157,19 @@ def test_customer_strips_account_number():
 
 
 def test_fact_computes_date_key_from_datetime():
-    result = _run(_transform_fact, _FACT_RAW)
+    result = _run_fact(_FACT_RAW)
     row = next(r for r in result if r["sales_order_key"] == 1)
     assert row["order_date_key"] == 20220515
 
 
 def test_fact_computes_date_key_from_string():
-    result = _run(_transform_fact, _FACT_RAW)
+    result = _run_fact(_FACT_RAW)
     row = next(r for r in result if r["sales_order_key"] == 2)
     assert row["order_date_key"] == 20231101
 
 
 def test_fact_preserves_nulls_for_header_fields():
-    result = _run(_transform_fact, _FACT_RAW)
+    result = _run_fact(_FACT_RAW)
     row = next(r for r in result if r["sales_order_key"] == 2)
     assert row["sub_total"] is None
     assert row["tax_amt"] is None
@@ -155,5 +178,26 @@ def test_fact_preserves_nulls_for_header_fields():
 
 
 def test_fact_row_count_preserved():
-    result = _run(_transform_fact, _FACT_RAW)
+    result = _run_fact(_FACT_RAW)
     assert len(result) == len(_FACT_RAW)
+
+
+def test_fact_resolves_payment_method_key():
+    result = _run_fact(_FACT_RAW)
+    vista_row = next(r for r in result if r["sales_order_key"] == 1)
+    assert vista_row["payment_method_key"] == 4
+
+    none_row = next(r for r in result if r["sales_order_key"] == 2)
+    assert none_row["payment_method_key"] == 0
+
+
+def test_fact_maps_geography_and_delivery_keys():
+    result = _run_fact(_FACT_RAW)
+    row = next(r for r in result if r["sales_order_key"] == 1)
+    assert row["geography_key"] == 1001
+    assert row["delivery_method_key"] == 2
+
+
+def test_fact_order_channel_always_online():
+    result = _run_fact(_FACT_RAW)
+    assert all(r["order_channel_key"] == 1 for r in result)
