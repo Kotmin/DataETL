@@ -79,15 +79,10 @@ def test_transform_preserves_nulls_for_no_subcategory():
     assert no_sub["category_name"] is None
 
 
-def test_transform_product_key_uniqueness():
-    raw = _make_raw_rows([
-        {"ProductID": 1, "ProductNumber": "DUP", "ProductName": "Dup",
-         "ProductSubcategoryID": None, "SubcategoryName": None,
-         "ProductCategoryID": None, "CategoryName": None},
-    ])
-    result = _run_transform(raw)
-    keys = [r["product_key"] for r in result]
-    assert len(keys) == len(set(keys)), "Duplicate ProductKeys found after transform"
+def test_transform_product_key_maps_from_product_id():
+    result = _run_transform(_make_raw_rows())
+    assert result[0]["product_key"] == 1
+    assert result[1]["product_key"] == 2
 
 
 def test_transform_row_count_preserved():
