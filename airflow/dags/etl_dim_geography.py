@@ -26,10 +26,8 @@ def _mssql_conn():
 
 def _pg_conn():
     return psycopg2.connect(
-        host=os.environ["PG_HOST"],
-        port=os.environ["PG_PORT"],
-        dbname=os.environ["PG_DB"],
-        user=os.environ["PG_USER"],
+        host=os.environ["PG_HOST"], port=os.environ["PG_PORT"],
+        dbname=os.environ["PG_DB"], user=os.environ["PG_USER"],
         password=os.environ["PG_PASSWORD"],
     )
 
@@ -50,14 +48,15 @@ def transform(**context):
     raw_rows = context["ti"].xcom_pull(task_ids="extract_dim_geography", key="raw_rows")
     transformed = [
         {
-            "geography_key":       row["GeographyKey"],
-            "address_line1":       row["AddressLine1"],
-            "city":                (row["City"] or "").strip(),
+            "geography_key":       int(row["GeographyKey"]),
+            "country_key":         int(row["CountryKey"]),
+            "country_name":        (row["CountryName"] or "").strip(),
+            "country_code":        (row["CountryCode"] or "").strip(),
+            "city_key":            int(row["CityKey"]),
+            "city_name":           (row["CityName"] or "").strip(),
             "state_province_code": row["StateProvinceCode"],
             "state_province_name": row["StateProvinceName"],
-            "country_region_code": (row["CountryRegionCode"] or "").strip(),
-            "country_name":        (row["CountryName"] or "").strip(),
-            "postal_code":         row["PostalCode"],
+            "sales_territory_key": int(row["SalesTerritoryKey"]) if row["SalesTerritoryKey"] is not None else None,
         }
         for row in raw_rows
     ]
@@ -73,12 +72,14 @@ def load(**context):
             cur.executemany(
                 """
                 INSERT INTO dim.dim_geography
-                    (geography_key, address_line1, city, state_province_code,
-                     state_province_name, country_region_code, country_name, postal_code)
+                    (geography_key, country_key, country_name, country_code,
+                     city_key, city_name, state_province_code, state_province_name,
+                     sales_territory_key)
                 VALUES
-                    (%(geography_key)s, %(address_line1)s, %(city)s,
+                    (%(geography_key)s, %(country_key)s, %(country_name)s,
+                     %(country_code)s, %(city_key)s, %(city_name)s,
                      %(state_province_code)s, %(state_province_name)s,
-                     %(country_region_code)s, %(country_name)s, %(postal_code)s)
+                     %(sales_territory_key)s)
                 """,
                 rows,
             )
@@ -101,19 +102,8 @@ with DAG(
     tags=["dim", "geography"],
 ) as dag:
 
-    extract_task = PythonOperator(
-        task_id="extract_dim_geography",
-        python_callable=extract,
-    )
-
-    transform_task = PythonOperator(
-        task_id="transform_dim_geography",
-        python_callable=transform,
-    )
-
-    load_task = PythonOperator(
-        task_id="load_dim_geography",
-        python_callable=load,
-    )
+    extract_task = PythonOperator(task_id="extract_dim_geography", python_callable=extract)
+    transform_task = PythonOperator(task_id="transform_dim_geography", python_callable=transform)
+    load_task = PythonOperator(task_id="load_dim_geography", python_callable=load)
 
     extract_task >> transform_task >> load_task
