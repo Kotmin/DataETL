@@ -7,7 +7,7 @@ from pathlib import Path
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 
-from connections import mssql_conn as _mssql_conn, pg_conn as _pg_conn
+from connections import MSSQLParams, PGParams, mssql_conn, pg_conn
 
 REPO_ROOT = Path(__file__).parents[2]
 EXTRACT_SQL = (REPO_ROOT / "sql" / "source" / "extract_fact_online_sales.sql").read_text()
@@ -24,7 +24,7 @@ def _to_date_key(val):
 
 
 def extract(**context):
-    conn = _mssql_conn()
+    conn = mssql_conn(MSSQLParams.from_env())
     try:
         cursor = conn.cursor()
         cursor.execute(EXTRACT_SQL)
@@ -38,7 +38,7 @@ def extract(**context):
 def transform(**context):
     raw_rows = context["ti"].xcom_pull(task_ids="extract_fact_online_sales", key="raw_rows")
 
-    pg = _pg_conn()
+    pg = pg_conn(PGParams.from_env())
     try:
         with pg.cursor() as cur:
             cur.execute("SELECT payment_method_name, payment_method_key FROM dim.dim_payment_method")
@@ -90,7 +90,7 @@ def transform(**context):
 
 def load(**context):
     rows = context["ti"].xcom_pull(task_ids="transform_fact_online_sales", key="transformed_rows")
-    conn = _pg_conn()
+    conn = pg_conn(PGParams.from_env())
     try:
         with conn.cursor() as cur:
             cur.execute("TRUNCATE TABLE fact.fact_online_sales")

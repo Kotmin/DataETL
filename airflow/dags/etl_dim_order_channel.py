@@ -5,7 +5,7 @@ from datetime import datetime
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 
-from connections import mssql_conn as _mssql_conn, pg_conn as _pg_conn
+from connections import MSSQLParams, PGParams, mssql_conn, pg_conn
 
 _CHANNEL_MAP = {
     1: {"order_channel_key": 1, "channel_name": "Online",   "online_flag": True},
@@ -14,7 +14,7 @@ _CHANNEL_MAP = {
 
 
 def extract(**context):
-    conn = _mssql_conn()
+    conn = mssql_conn(MSSQLParams.from_env())
     try:
         cursor = conn.cursor()
         cursor.execute("SELECT DISTINCT OnlineOrderFlag FROM Sales.SalesOrderHeader")
@@ -32,7 +32,7 @@ def transform(**context):
 
 def load(**context):
     rows = context["ti"].xcom_pull(task_ids="transform_dim_order_channel", key="transformed_rows")
-    conn = _pg_conn()
+    conn = pg_conn(PGParams.from_env())
     try:
         with conn.cursor() as cur:
             cur.execute("TRUNCATE TABLE dim.dim_order_channel CASCADE")

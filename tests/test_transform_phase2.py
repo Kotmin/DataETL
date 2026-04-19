@@ -42,9 +42,8 @@ def _run_customer(raw_rows):
     mock_conn.cursor.return_value.__enter__ = lambda s: mock_cursor
     mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
     ti = _FakeXCom(raw_rows)
-    with patch.object(
-        sys.modules["etl_dim_customer"], "_pg_conn", return_value=mock_conn
-    ):
+    with patch.object(sys.modules["etl_dim_customer"], "pg_conn", return_value=mock_conn), \
+         patch.object(sys.modules["etl_dim_customer"], "PGParams"):
         sys.modules["etl_dim_customer"].transform(**{"ti": ti})
     assert ti._pushed[0] == "transformed_rows"
     return ti._pushed[1]
@@ -57,7 +56,8 @@ def _run_fact(raw_rows):
     mock_conn.cursor.return_value.__enter__ = lambda s: mock_cursor
     mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
     ti = _FakeXCom(raw_rows)
-    with patch.object(_fact_module, "_pg_conn", return_value=mock_conn):
+    with patch.object(_fact_module, "pg_conn", return_value=mock_conn), \
+         patch.object(_fact_module, "PGParams"):
         _fact_module.transform(**{"ti": ti})
     assert ti._pushed[0] == "transformed_rows"
     return ti._pushed[1]

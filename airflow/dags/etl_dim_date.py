@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 
-from connections import mssql_conn as _mssql_conn, pg_conn as _pg_conn
+from connections import MSSQLParams, PGParams, mssql_conn, pg_conn
 
 _MONTH_NAMES = ["January","February","March","April","May","June",
                 "July","August","September","October","November","December"]
@@ -13,7 +13,7 @@ _DAY_NAMES   = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","S
 
 
 def generate_and_load(**_):
-    conn = _mssql_conn()
+    conn = mssql_conn(MSSQLParams.from_env())
     try:
         cursor = conn.cursor()
         cursor.execute("""
@@ -47,7 +47,7 @@ def generate_and_load(**_):
         })
         current += timedelta(days=1)
 
-    pg = _pg_conn()
+    pg = pg_conn(PGParams.from_env())
     try:
         with pg.cursor() as cur:
             cur.execute("TRUNCATE TABLE dim.dim_date")
