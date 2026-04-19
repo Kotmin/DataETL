@@ -71,7 +71,7 @@ def load(**context):
 
 with DAG(
     dag_id="etl_dim_product",
-    schedule=None,
+    schedule="0 3 * * *",
     start_date=datetime(2025, 1, 1),
     catchup=False,
     tags=["dim", "product", "poc"],

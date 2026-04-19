@@ -126,7 +126,7 @@ def load(**context):
 
 with DAG(
     dag_id="etl_fact_online_sales",
-    schedule=None,
+    schedule="0 * * * *",
     start_date=datetime(2025, 1, 1),
     catchup=False,
     tags=["fact", "sales"],

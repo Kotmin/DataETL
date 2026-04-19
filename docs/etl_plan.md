@@ -2,33 +2,85 @@
 
 ## Overview
 
-This document describes the execution plan, blocking dependency graph, and component responsibilities for the AdventureWorks ETL Teaching Lab PoC.
+AdventureWorks OLTP (SQL Server) → Airflow ETL → Star schema data mart (PostgreSQL).
+9 DAGs, 8 dimensions + 1 fact table, ~83k rows total.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────┐
-│  Host (Ubuntu / WSL2)                   │
-│                                         │
-│  Apache Airflow (local .venv)           │
-│    └── DAG: etl_dim_product             │
-│         extract → transform → load      │
-│                                         │
-│  Claude Code MCP: sql-query             │
-│    └── tools/sql_query/server.py        │
-└─────────────────┬───────────────────────┘
-                  │ pyodbc / psycopg2
-         ┌────────┴─────────┐
-         ▼                  ▼
-  ┌─────────────┐   ┌───────────────┐
-  │ SQL Server  │   │  PostgreSQL   │
-  │  (Docker)   │   │   (Docker)    │
-  │  port 1433  │   │   port 5432   │
-  │             │   │               │
-  │ AdventureW. │   │ dim schema    │
-  │    OLTP     │   │ dim_product   │
-  └─────────────┘   └───────────────┘
+┌──────────────────────────────────────────────────────┐
+│  Host (Ubuntu / WSL2)                                │
+│                                                      │
+│  Apache Airflow 3.2.0 (local .venv, standalone)      │
+│    DAGs:                                             │
+│      etl_dim_date          (daily  03:00)            │
+│      etl_dim_order_channel (weekly Mon 02:00)        │
+│      etl_dim_sales_territory (weekly Mon 02:00)      │
+│      etl_dim_delivery_method (weekly Mon 02:00)      │
+│      etl_dim_payment_method  (weekly Mon 02:00)      │
+│      etl_dim_geography     (daily  03:00)            │
+│      etl_dim_product       (daily  03:00)            │
+│      etl_dim_customer      (daily  04:00)            │
+│      etl_fact_online_sales (hourly)                  │
+│                                                      │
+│  Operations CLI: app/main.py                         │
+│  Claude Code MCP: tools/sql_query/server.py          │
+└──────────────────┬───────────────────────────────────┘
+                   │ pyodbc / psycopg2
+          ┌────────┴─────────┐
+          ▼                  ▼
+   ┌─────────────┐   ┌───────────────┐
+   │ SQL Server  │   │  PostgreSQL   │
+   │  (Docker)   │   │   (Docker)    │
+   │  port 1433  │   │   port 5432   │
+   │ AW2025 OLTP │   │ dim + fact    │
+   └─────────────┘   └───────────────┘
 ```
+
+## Quickstart
+
+```bash
+# 1 — Start databases
+cd docker && docker compose up -d
+
+# 2 — Start Airflow
+./scripts/start_airflow.sh        # UI at http://localhost:8080
+
+# 3 — Check warehouse state
+.venv/bin/python app/main.py status
+
+# 4 — Run all ETL (direct, no scheduler)
+.venv/bin/python app/main.py run --all
+
+# 4b — OR trigger via Airflow scheduler
+.venv/bin/python app/main.py airflow-trigger --all
+
+# 5 — Export to CSV
+.venv/bin/python app/main.py export --out exports/
+
+# 6 — Run tests
+.venv/bin/pytest tests/ -v
+```
+
+## DAG Execution Order and Schedules
+
+Dependencies must be respected when triggering manually:
+
+```
+1. etl_dim_date             daily 03:00      (MSSQL — date range from OrderDate/ShipDate)
+2. etl_dim_order_channel    weekly Mon 02:00 (MSSQL — DISTINCT OnlineOrderFlag)
+3. etl_dim_sales_territory  weekly Mon 02:00 (MSSQL — SalesTerritory + CountryRegion)
+4. etl_dim_delivery_method  weekly Mon 02:00 (MSSQL — Purchasing.ShipMethod)
+5. etl_dim_payment_method   weekly Mon 02:00 (MSSQL — DISTINCT CardType)  ← before fact
+6. etl_dim_geography        daily 03:00      (MSSQL — city-grain surrogate)  ← before customer
+7. etl_dim_product          daily 03:00      (MSSQL — Product + subcategory + category)
+8. etl_dim_customer         daily 04:00      (MSSQL + PG lookup for geography_key)
+9. etl_fact_online_sales    hourly           (MSSQL + PG lookup for payment_method_key)
+```
+
+**On scheduling intervals:** all DAGs use full reload (TRUNCATE + INSERT). Hourly for fact
+is appropriate for this pattern. A 5-minute interval requires an incremental/CDC approach
+— only new or changed rows would be written each run instead of re-loading the whole table.
 
 ## Blocking Dependency Graph
 
@@ -36,82 +88,82 @@ This document describes the execution plan, blocking dependency graph, and compo
 LAYER 0 — Prerequisites
   [P1] apt: msodbcsql18, python3-venv, unixodbc-dev
   [P2] .env.example → .env
-  [P3] requirements.txt
+  [P3] requirements.txt → .venv/bin/pip install
 
-LAYER 1 — Infrastructure                    (needs P2)
+LAYER 1 — Infrastructure                      (needs P2)
   [I1] docker/docker-compose.yml
   [I2] docker/sqlserver/init/restore.sh
   [I3] docker/postgres/init/01_warehouse_schema.sql
   ↓ docker compose up → DBs live
 
-LAYER 2 — Mapping + SQL                     (can write before Docker; validate after)
-  [S1] docs/source_to_target_mapping.md
-  [S2] sql/source/extract_dim_product.sql   (needs S1)
-  [S3] sql/warehouse/ddl_dim_product.sql    (needs S1)
-  [S4] sql/transforms/transform_dim_product.sql
+LAYER 2 — Mapping + SQL                       (validate after Docker up)
+  [S1] docs/source_to_target_mapping.md        ← canonical column mapping
+  [S2] sql/source/extract_*.sql               (9 files)
+  [S3] sql/warehouse/ddl_*.sql               (9 files)
 
-LAYER 3 — MCP Tool                          (needs P1 venv)
+LAYER 3 — MCP Tool                            (needs P3 venv)
   [M1] tools/sql_query/server.py
   [M2] .claude/settings.json  ← MCP registration
 
-LAYER 4 — ETL Pipeline                      (needs S2+S3+S4 + Docker up)
-  [E1] airflow/dags/etl_dim_product.py
-  [E2] scripts/start_airflow.sh
-  [E3] scripts/bootstrap.sh
-  [E4] scripts/reset_env.sh
+LAYER 4 — ETL Pipeline                        (needs S2+S3 + Docker up)
+  [E1] airflow/dags/connections.py            ← shared MSSQLParams / PGParams
+  [E2] airflow/dags/etl_*.py                 (9 DAGs)
+  [E3] scripts/start_airflow.sh
+  [E4] app/main.py                            ← ops CLI
 
-LAYER 5 — Tests                             (needs I1-I3 up; T4 needs completed DAG)
-  [T1] tests/conftest.py
-  [T2] tests/test_extract.py    — requires live MSSQL
-  [T3] tests/test_transform.py  — pure Python, no DB needed
-  [T4] tests/test_load.py       — @pytest.mark.integration, needs DAG run
+LAYER 5 — Tests
+  [T1] tests/test_transform.py               pure Python, no DB
+  [T2] tests/test_transform_phase2.py        pure Python, no DB
 
-LAYER 6 — Ralph Agents
-  [R1] .claude/agents/branch-master.md
-  [R2] .claude/agents/hypervisor.md
-
-LAYER 7 — Cron Jobs                         (after env verified working)
-  [C1] Workflow state monitor  */30 9-18 * * 1-5
-  [C2] Restore-if-failed cron  0 7 * * 1-5
-
-CRITICAL PATH: P1→P2→I1→I2→I3→(DBs up)→S2+S3→E1→(Airflow run)→T4
+CRITICAL PATH: P1→P2→I1→I2→I3→(DBs up)→S2+S3→E2→(Airflow run)→verify
 ```
+
+## Warehouse Tables
+
+| Table | Rows | Schedule | Source |
+|---|---|---|---|
+| `dim.dim_date` | 2,191 | daily 03:00 | Generated from MSSQL date range |
+| `dim.dim_order_channel` | 2 | weekly Mon | MSSQL `OnlineOrderFlag` |
+| `dim.dim_sales_territory` | 10 | weekly Mon | MSSQL `SalesTerritory` |
+| `dim.dim_delivery_method` | 5 | weekly Mon | MSSQL `ShipMethod` |
+| `dim.dim_payment_method` | 5 | weekly Mon | MSSQL `CreditCard` |
+| `dim.dim_geography` | 613 | daily 03:00 | MSSQL city-grain surrogate |
+| `dim.dim_product` | 504 | daily 03:00 | MSSQL `Product` hierarchy |
+| `dim.dim_customer` | 19,820 | daily 04:00 | MSSQL + PG geography FK |
+| `fact.fact_online_sales` | 60,398 | hourly | MSSQL + PG payment FK |
+
+## Key Design Decisions
+
+| Decision | Rationale |
+|---|---|
+| Full reload (TRUNCATE + INSERT) | Simplest for a teaching lab; incremental needs CDC/watermark |
+| Surrogate keys via ROW_NUMBER() | No dependency on source auto-increment; stable across reloads |
+| `OUTER APPLY TOP 1` for customer address | Deterministic single-address selection per customer |
+| `DENSE_RANK()` for CountryKey | Conformed key shared between dim_geography and dim_sales_territory |
+| Proportional freight allocation | `delivery_cost = Freight × LineTotal / OrderSubTotal` per line |
+| `MSSQLParams` / `PGParams` dataclasses | Typed connection contracts; second DB = new params object, no env changes |
 
 ## Components
 
-### docker/docker-compose.yml
-Spins up SQL Server 2022 (port 1433) and PostgreSQL 16 (port 5432) with persistent named volumes. SQL Server uses a custom entrypoint that restores the AdventureWorks `.bak` on first start. PostgreSQL auto-runs `01_warehouse_schema.sql` via `docker-entrypoint-initdb.d`.
+### `airflow/dags/connections.py`
+Shared connection module. `MSSQLParams` and `PGParams` dataclasses hold typed connection parameters. `.from_env()` classmethods read the standard `.env` variables. Pass a different params object to connect to a second database instance.
 
-### docker/sqlserver/init/restore.sh
-Starts `sqlservr` in background, polls until ready, auto-detects logical file names via `RESTORE FILELISTONLY`, then restores the database. Idempotent — skips restore if database already exists.
+### `app/main.py`
+Operations CLI. Commands: `status` (row counts), `run --all` (direct ETL execution), `export --out DIR` (CSV dump), `airflow-trigger --all` (Airflow scheduler trigger).
 
-### tools/sql_query/server.py
-Universal MCP server (stdio transport). Exposes `query_sql(connection, sql)` — accepts `"mssql"` or `"postgres"`, returns JSON `list[dict]`. Registered in `.claude/settings.json` so Claude Code can query both databases directly during development.
+### `tools/sql_query/server.py`
+Universal MCP server (stdio transport). Exposes `query_sql(connection, sql)` — accepts `"mssql"` or `"postgres"`, returns JSON `list[dict]`. Registered in `.claude/settings.json`.
 
-### airflow/dags/etl_dim_product.py
-3-task linear DAG (manual trigger only for PoC):
-- `extract_dim_product` — reads `sql/source/extract_dim_product.sql`, queries MSSQL, pushes rows via XCom
-- `transform_dim_product` — remaps column names, trims strings, pulls/pushes XCom
-- `load_dim_product` — TRUNCATE + INSERT into `dim.dim_product` via psycopg2
+### `docker/sqlserver/init/restore.sh`
+Starts `sqlservr` in background, polls until ready, auto-detects logical file names via `RESTORE FILELISTONLY`, then restores the AdventureWorks database. Idempotent.
 
-### Ralph Agents
-- **branch-master** — invoked via `/ralph-loop $(cat .claude/agents/branch-master.md) --completion-promise 'BRANCH CLEAN AND COMMITTED'`. Groups staged changes into atomic conventional commits.
-- **hypervisor** — invoked via `/ralph-loop $(cat .claude/agents/hypervisor.md) --completion-promise 'ENVIRONMENT HEALTHY'`. Checks Docker + Airflow + stale ralph state.
+## Milestones
 
-### Cron Jobs (set up via `schedule` skill after first successful DAG run)
-```bash
-# Workflow state monitor
-schedule: */30 9-18 * * 1-5
-# Pre-lab container restore
-schedule: 0 7 * * 1-5
-```
-
-## Milestones vs Plan Alignment
-
-| PRD Milestone | Status |
+| Milestone | Status |
 |---|---|
-| M1 — Architecture lock | Done (SQL Server + PostgreSQL + local Airflow) |
-| M2 — Environment bootstrap | Done (bootstrap.sh + docker-compose.yml) |
-| M3 — Mapping spec | Done (docs/source_to_target_mapping.md) |
-| M4 — PoC implementation | Ready to verify (requires `./scripts/bootstrap.sh` run) |
-| M5 — Phase 2 planning | Deferred |
+| M1 — Architecture lock | Done — SQL Server + PostgreSQL + Airflow 3.2 standalone |
+| M2 — Environment bootstrap | Done — docker-compose, start_airflow.sh |
+| M3 — Mapping spec | Done — docs/source_to_target_mapping.md (all 9 tables) |
+| M4 — PoC (dim_product) | Done |
+| M5 — Phase 2 (all 9 DAGs) | Done — 60k fact rows, 8 dims, schedules set |
+| M6 — Modular connections | Done — MSSQLParams/PGParams, ops CLI |
