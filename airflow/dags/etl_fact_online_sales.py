@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
@@ -34,6 +35,16 @@ def _pg_conn():
     )
 
 
+def _to_date_key(val):
+    if val is None:
+        return None
+    if isinstance(val, str):
+        val = datetime.strptime(val[:10], "%Y-%m-%d").date()
+    elif hasattr(val, "date"):
+        val = val.date()
+    return int(val.strftime("%Y%m%d"))
+
+
 def extract(**context):
     conn = _mssql_conn()
     try:
@@ -57,35 +68,43 @@ def transform(**context):
     finally:
         pg.close()
 
+    order_subtotal: dict[str, float] = defaultdict(float)
+    for row in raw_rows:
+        order_subtotal[row["OrderKey"]] += float(row["LineTotal"] or 0)
+
     transformed = []
     for row in raw_rows:
-        order_date = row["OrderDate"]
-        if isinstance(order_date, str):
-            order_date = datetime.strptime(order_date[:10], "%Y-%m-%d").date()
-        elif hasattr(order_date, "date"):
-            order_date = order_date.date()
-        date_key = int(order_date.strftime("%Y%m%d"))
+        unit_price     = float(row["UnitPrice"] or 0)
+        discount_frac  = float(row["UnitPriceDiscount"] or 0)
+        line_total     = float(row["LineTotal"] or 0)
+        freight        = float(row["Freight"] or 0)
+        sub_total      = order_subtotal[row["OrderKey"]]
+
+        discount_amount   = round(unit_price * discount_frac, 2)
+        discount_pctg     = round(discount_frac * 100)
+        transaction_price = round(unit_price * (1 - discount_frac), 2)
+        delivery_cost     = round(freight * line_total / sub_total, 2) if sub_total > 0 else round(freight, 2)
 
         card_type = row.get("CardType") or "None"
         transformed.append(
             {
-                "sales_order_key":     row["SalesOrderKey"],
-                "order_date_key":      date_key,
-                "customer_key":        row["CustomerID"],
-                "product_key":         row["ProductID"],
-                "territory_key":       row["TerritoryID"],
-                "order_channel_key":   1,
+                "order_key":           str(row["OrderKey"]),
+                "order_line_number":   int(row["OrderLineNumber"]),
+                "customer_key":        int(row["CustomerID"]) if row["CustomerID"] is not None else None,
+                "product_key":         int(row["ProductID"]),
+                "sales_territory_key": int(row["TerritoryID"]) if row["TerritoryID"] is not None else None,
+                "channel_key":         1,
                 "payment_method_key":  pm_lookup.get(card_type),
-                "geography_key":       row["ShipToAddressID"],
-                "delivery_method_key": row["ShipMethodID"],
-                "order_qty":           row["OrderQty"],
-                "unit_price":          row["UnitPrice"],
-                "unit_price_discount": row["UnitPriceDiscount"],
-                "line_total":          float(row["LineTotal"]),
-                "sub_total":           float(row["SubTotal"]) if row["SubTotal"] is not None else None,
-                "tax_amt":             float(row["TaxAmt"]) if row["TaxAmt"] is not None else None,
-                "freight":             float(row["Freight"]) if row["Freight"] is not None else None,
-                "total_due":           float(row["TotalDue"]) if row["TotalDue"] is not None else None,
+                "delivery_method_key": int(row["ShipMethodID"]) if row["ShipMethodID"] is not None else None,
+                "order_date_key":      _to_date_key(row["OrderDate"]),
+                "ship_date_key":       _to_date_key(row["ShipDate"]),
+                "quantity":            int(row["OrderQty"]),
+                "catalog_price":       round(unit_price, 2),
+                "discount_amount":     discount_amount,
+                "discount_pctg":       discount_pctg,
+                "transaction_price":   transaction_price,
+                "delivery_cost":       delivery_cost,
+                "product_cost":        round(float(row["ProductCost"] or 0), 2),
             }
         )
     context["ti"].xcom_push(key="transformed_rows", value=transformed)
@@ -100,18 +119,19 @@ def load(**context):
             cur.executemany(
                 """
                 INSERT INTO fact.fact_online_sales
-                    (sales_order_key, order_date_key, customer_key, product_key,
-                     territory_key, order_channel_key, payment_method_key,
-                     geography_key, delivery_method_key,
-                     order_qty, unit_price, unit_price_discount, line_total,
-                     sub_total, tax_amt, freight, total_due)
+                    (order_key, order_line_number, customer_key, product_key,
+                     sales_territory_key, channel_key, payment_method_key,
+                     delivery_method_key, order_date_key, ship_date_key,
+                     quantity, catalog_price, discount_amount, discount_pctg,
+                     transaction_price, delivery_cost, product_cost)
                 VALUES
-                    (%(sales_order_key)s, %(order_date_key)s, %(customer_key)s,
-                     %(product_key)s, %(territory_key)s, %(order_channel_key)s,
-                     %(payment_method_key)s, %(geography_key)s, %(delivery_method_key)s,
-                     %(order_qty)s, %(unit_price)s, %(unit_price_discount)s,
-                     %(line_total)s, %(sub_total)s, %(tax_amt)s,
-                     %(freight)s, %(total_due)s)
+                    (%(order_key)s, %(order_line_number)s, %(customer_key)s,
+                     %(product_key)s, %(sales_territory_key)s, %(channel_key)s,
+                     %(payment_method_key)s, %(delivery_method_key)s,
+                     %(order_date_key)s, %(ship_date_key)s,
+                     %(quantity)s, %(catalog_price)s, %(discount_amount)s,
+                     %(discount_pctg)s, %(transaction_price)s,
+                     %(delivery_cost)s, %(product_cost)s)
                 """,
                 rows,
             )
@@ -134,19 +154,8 @@ with DAG(
     tags=["fact", "sales"],
 ) as dag:
 
-    extract_task = PythonOperator(
-        task_id="extract_fact_online_sales",
-        python_callable=extract,
-    )
-
-    transform_task = PythonOperator(
-        task_id="transform_fact_online_sales",
-        python_callable=transform,
-    )
-
-    load_task = PythonOperator(
-        task_id="load_fact_online_sales",
-        python_callable=load,
-    )
+    extract_task = PythonOperator(task_id="extract_fact_online_sales", python_callable=extract)
+    transform_task = PythonOperator(task_id="transform_fact_online_sales", python_callable=transform)
+    load_task = PythonOperator(task_id="load_fact_online_sales", python_callable=load)
 
     extract_task >> transform_task >> load_task
