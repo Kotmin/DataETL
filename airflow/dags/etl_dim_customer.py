@@ -26,10 +26,8 @@ def _mssql_conn():
 
 def _pg_conn():
     return psycopg2.connect(
-        host=os.environ["PG_HOST"],
-        port=os.environ["PG_PORT"],
-        dbname=os.environ["PG_DB"],
-        user=os.environ["PG_USER"],
+        host=os.environ["PG_HOST"], port=os.environ["PG_PORT"],
+        dbname=os.environ["PG_DB"], user=os.environ["PG_USER"],
         password=os.environ["PG_PASSWORD"],
     )
 
@@ -48,18 +46,35 @@ def extract(**context):
 
 def transform(**context):
     raw_rows = context["ti"].xcom_pull(task_ids="extract_dim_customer", key="raw_rows")
-    transformed = [
-        {
-            "customer_key": row["CustomerID"],
-            "account_number": (row["AccountNumber"] or "").strip(),
-            "first_name": row["FirstName"],
-            "last_name": row["LastName"],
-            "full_name": row["FullName"],
-            "territory_key": row["TerritoryID"],
-            "territory_name": row["TerritoryName"],
-        }
-        for row in raw_rows
-    ]
+
+    pg = _pg_conn()
+    try:
+        with pg.cursor() as cur:
+            cur.execute("""
+                SELECT city_name, state_province_code, country_code, geography_key
+                FROM dim.dim_geography
+            """)
+            geog_lookup = {
+                (row[0].strip().lower(), (row[1] or "").strip().lower(), row[2].strip().lower()): row[3]
+                for row in cur.fetchall()
+            }
+    finally:
+        pg.close()
+
+    transformed = []
+    for row in raw_rows:
+        city = (row.get("City") or "").strip().lower()
+        sp   = (row.get("StateProvinceCode") or "").strip().lower()
+        cc   = (row.get("CountryRegionCode") or "").strip().lower()
+        geography_key = geog_lookup.get((city, sp, cc)) if city else None
+        transformed.append(
+            {
+                "customer_key":  int(row["CustomerID"]),
+                "first_name":    row["FirstName"],
+                "last_name":     row["LastName"],
+                "geography_key": geography_key,
+            }
+        )
     context["ti"].xcom_push(key="transformed_rows", value=transformed)
 
 
@@ -72,11 +87,9 @@ def load(**context):
             cur.executemany(
                 """
                 INSERT INTO dim.dim_customer
-                    (customer_key, account_number, first_name, last_name,
-                     full_name, territory_key, territory_name)
+                    (customer_key, first_name, last_name, geography_key)
                 VALUES
-                    (%(customer_key)s, %(account_number)s, %(first_name)s,
-                     %(last_name)s, %(full_name)s, %(territory_key)s, %(territory_name)s)
+                    (%(customer_key)s, %(first_name)s, %(last_name)s, %(geography_key)s)
                 """,
                 rows,
             )
@@ -99,19 +112,8 @@ with DAG(
     tags=["dim", "customer"],
 ) as dag:
 
-    extract_task = PythonOperator(
-        task_id="extract_dim_customer",
-        python_callable=extract,
-    )
-
-    transform_task = PythonOperator(
-        task_id="transform_dim_customer",
-        python_callable=transform,
-    )
-
-    load_task = PythonOperator(
-        task_id="load_dim_customer",
-        python_callable=load,
-    )
+    extract_task = PythonOperator(task_id="extract_dim_customer", python_callable=extract)
+    transform_task = PythonOperator(task_id="transform_dim_customer", python_callable=transform)
+    load_task = PythonOperator(task_id="load_dim_customer", python_callable=load)
 
     extract_task >> transform_task >> load_task
