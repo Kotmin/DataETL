@@ -3,16 +3,25 @@ from __future__ import annotations
 import os
 from datetime import date, datetime, timedelta
 
+import pyodbc
 import psycopg2
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 
-CALENDAR_START = date(2022, 1, 1)
-CALENDAR_END   = date(2026, 12, 31)
-
 _MONTH_NAMES = ["January","February","March","April","May","June",
                 "July","August","September","October","November","December"]
 _DAY_NAMES   = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+
+
+def _mssql_conn():
+    dsn = (
+        "DRIVER={ODBC Driver 18 for SQL Server};"
+        f"SERVER={os.environ['MSSQL_HOST']},{os.environ['MSSQL_PORT']};"
+        f"DATABASE={os.environ['MSSQL_DB']};"
+        f"UID=sa;PWD={os.environ['MSSQL_SA_PASSWORD']};"
+        "TrustServerCertificate=yes;"
+    )
+    return pyodbc.connect(dsn)
 
 
 def _pg_conn():
@@ -24,41 +33,58 @@ def _pg_conn():
 
 
 def generate_and_load(**_):
+    conn = _mssql_conn()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT MIN(OrderDate), MAX(ISNULL(ShipDate, OrderDate))
+            FROM Sales.SalesOrderHeader
+            WHERE OnlineOrderFlag = 1
+        """)
+        min_date, max_date = cursor.fetchone()
+    finally:
+        conn.close()
+
+    start = (min_date.date() if hasattr(min_date, "date") else min_date).replace(year=min_date.year - 1, month=1, day=1)
+    end   = (max_date.date() if hasattr(max_date, "date") else max_date).replace(year=max_date.year + 1, month=12, day=31)
+
     rows = []
-    current = CALENDAR_START
-    while current <= CALENDAR_END:
+    current = start
+    while current <= end:
         rows.append({
-            "date_key":     int(current.strftime("%Y%m%d")),
-            "full_date":    current,
-            "year":         current.year,
-            "quarter":      (current.month - 1) // 3 + 1,
-            "month":        current.month,
-            "month_name":   _MONTH_NAMES[current.month - 1],
-            "week_of_year": int(current.strftime("%W")),
-            "day_of_month": current.day,
-            "day_of_week":  current.weekday() + 1,
-            "day_name":     _DAY_NAMES[current.weekday()],
-            "is_weekend":   current.weekday() >= 5,
+            "date_key":             int(current.strftime("%Y%m%d")),
+            "full_date":            current,
+            "calendar_year":        current.year,
+            "calendar_quarter":     (current.month - 1) // 3 + 1,
+            "month_number_of_year": current.month,
+            "month_name":           _MONTH_NAMES[current.month - 1],
+            "week_number_of_year":  int(current.strftime("%W")),
+            "day_number_of_year":   current.timetuple().tm_yday,
+            "day_number_of_month":  current.day,
+            "day_number_of_week":   current.weekday() + 1,
+            "day_name_of_week":     _DAY_NAMES[current.weekday()],
+            "is_weekend":           current.weekday() >= 5,
         })
         current += timedelta(days=1)
 
-    conn = _pg_conn()
+    pg = _pg_conn()
     try:
-        with conn.cursor() as cur:
+        with pg.cursor() as cur:
             cur.execute("TRUNCATE TABLE dim.dim_date")
             cur.executemany(
                 """INSERT INTO dim.dim_date VALUES
-                   (%(date_key)s,%(full_date)s,%(year)s,%(quarter)s,%(month)s,
-                    %(month_name)s,%(week_of_year)s,%(day_of_month)s,%(day_of_week)s,
-                    %(day_name)s,%(is_weekend)s)""",
+                   (%(date_key)s,%(full_date)s,%(calendar_year)s,%(calendar_quarter)s,
+                    %(month_number_of_year)s,%(month_name)s,%(week_number_of_year)s,
+                    %(day_number_of_year)s,%(day_number_of_month)s,%(day_number_of_week)s,
+                    %(day_name_of_week)s,%(is_weekend)s)""",
                 rows,
             )
             cur.execute("SELECT COUNT(*) FROM dim.dim_date")
             count = cur.fetchone()[0]
-        conn.commit()
+        pg.commit()
     finally:
-        conn.close()
-    print(f"Loaded {count} rows into dim.dim_date")
+        pg.close()
+    print(f"Loaded {count} rows into dim.dim_date (range {start} to {end})")
 
 
 with DAG(
