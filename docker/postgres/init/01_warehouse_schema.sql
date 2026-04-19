@@ -3,99 +3,99 @@ CREATE SCHEMA IF NOT EXISTS fact;
 
 CREATE TABLE IF NOT EXISTS dim.dim_product (
     product_key       INTEGER      NOT NULL,
-    product_code      VARCHAR(25)  NOT NULL,
-    product_name      VARCHAR(50)  NOT NULL,
-    subcategory_key   INTEGER,
-    subcategory_name  VARCHAR(50),
-    category_key      INTEGER,
-    category_name     VARCHAR(50),
+    product_code      VARCHAR(12)  NOT NULL,
+    product_name      VARCHAR(40)  NOT NULL,
+    subcategory_key   SMALLINT,
+    subcategory_name  VARCHAR(40),
+    category_key      SMALLINT,
+    category_name     VARCHAR(30),
     CONSTRAINT pk_dim_product PRIMARY KEY (product_key)
 );
 
 CREATE TABLE IF NOT EXISTS dim.dim_date (
-    date_key        INTEGER     NOT NULL,
-    full_date       DATE        NOT NULL,
-    year            SMALLINT    NOT NULL,
-    quarter         SMALLINT    NOT NULL,
-    month           SMALLINT    NOT NULL,
-    month_name      VARCHAR(9)  NOT NULL,
-    week_of_year    SMALLINT    NOT NULL,
-    day_of_month    SMALLINT    NOT NULL,
-    day_of_week     SMALLINT    NOT NULL,
-    day_name        VARCHAR(9)  NOT NULL,
-    is_weekend      BOOLEAN     NOT NULL,
+    date_key              INTEGER     NOT NULL,
+    full_date             DATE        NOT NULL,
+    calendar_year         SMALLINT    NOT NULL,
+    calendar_quarter      SMALLINT    NOT NULL,
+    month_number_of_year  SMALLINT    NOT NULL,
+    month_name            VARCHAR(12) NOT NULL,
+    week_number_of_year   SMALLINT    NOT NULL,
+    day_number_of_year    SMALLINT    NOT NULL,
+    day_number_of_month   SMALLINT    NOT NULL,
+    day_number_of_week    SMALLINT    NOT NULL,
+    day_name_of_week      VARCHAR(12) NOT NULL,
+    is_weekend            BOOLEAN     NOT NULL,
     CONSTRAINT pk_dim_date PRIMARY KEY (date_key)
 );
 
 CREATE TABLE IF NOT EXISTS dim.dim_customer (
-    customer_key    INTEGER      NOT NULL,
-    account_number  VARCHAR(10)  NOT NULL,
-    first_name      VARCHAR(50),
-    last_name       VARCHAR(50),
-    full_name       VARCHAR(101),
-    territory_key   INTEGER,
-    territory_name  VARCHAR(50),
+    customer_key   BIGINT       NOT NULL,
+    first_name     VARCHAR(25),
+    last_name      VARCHAR(45),
+    geography_key  SMALLINT,
     CONSTRAINT pk_dim_customer PRIMARY KEY (customer_key)
 );
 
-CREATE TABLE IF NOT EXISTS dim.dim_territory (
-    territory_key         INTEGER      NOT NULL,
-    territory_name        VARCHAR(50)  NOT NULL,
-    country_region_code   VARCHAR(3)   NOT NULL,
-    region_group          VARCHAR(50)  NOT NULL,
-    CONSTRAINT pk_dim_territory PRIMARY KEY (territory_key)
+CREATE TABLE IF NOT EXISTS dim.dim_sales_territory (
+    sales_territory_key  SMALLINT     NOT NULL,
+    sales_territory_name VARCHAR(50)  NOT NULL,
+    country_key          SMALLINT     NOT NULL,
+    country_name         VARCHAR(50)  NOT NULL,
+    country_code         CHAR(2)      NOT NULL,
+    CONSTRAINT pk_dim_sales_territory PRIMARY KEY (sales_territory_key)
 );
 
 CREATE TABLE IF NOT EXISTS dim.dim_order_channel (
-    order_channel_key   INTEGER      NOT NULL,
-    channel_name        VARCHAR(20)  NOT NULL,
-    online_flag         BOOLEAN      NOT NULL,
+    order_channel_key  SMALLINT     NOT NULL,
+    channel_name       VARCHAR(20)  NOT NULL,
+    online_flag        BOOLEAN      NOT NULL,
     CONSTRAINT pk_dim_order_channel PRIMARY KEY (order_channel_key)
 );
 
 CREATE TABLE IF NOT EXISTS dim.dim_payment_method (
-    payment_method_key  INTEGER      NOT NULL,
-    payment_method_name VARCHAR(50)  NOT NULL,
+    payment_method_key   SMALLINT    NOT NULL,
+    payment_method_name  VARCHAR(20) NOT NULL,
     CONSTRAINT pk_dim_payment_method PRIMARY KEY (payment_method_key)
 );
 
 CREATE TABLE IF NOT EXISTS dim.dim_geography (
-    geography_key       INTEGER      NOT NULL,
-    address_line1       VARCHAR(60),
-    city                VARCHAR(30)  NOT NULL,
+    geography_key       SMALLINT     NOT NULL,
+    country_key         SMALLINT     NOT NULL,
+    country_name        VARCHAR(50)  NOT NULL,
+    country_code        CHAR(2)      NOT NULL,
+    city_key            SMALLINT     NOT NULL,
+    city_name           VARCHAR(30)  NOT NULL,
     state_province_code VARCHAR(3),
     state_province_name VARCHAR(50),
-    country_region_code VARCHAR(3)   NOT NULL,
-    country_name        VARCHAR(50)  NOT NULL,
-    postal_code         VARCHAR(15),
+    sales_territory_key SMALLINT,
     CONSTRAINT pk_dim_geography PRIMARY KEY (geography_key)
 );
 
 CREATE TABLE IF NOT EXISTS dim.dim_delivery_method (
-    delivery_method_key     INTEGER         NOT NULL,
-    delivery_method_name    VARCHAR(50)     NOT NULL,
-    ship_base               NUMERIC(19,4),
-    ship_rate               NUMERIC(19,4),
+    delivery_method_key   SMALLINT        NOT NULL,
+    delivery_method_name  VARCHAR(20)     NOT NULL,
+    ship_base             NUMERIC(19,4),
+    ship_rate             NUMERIC(19,4),
     CONSTRAINT pk_dim_delivery_method PRIMARY KEY (delivery_method_key)
 );
 
 CREATE TABLE IF NOT EXISTS fact.fact_online_sales (
-    sales_order_key     BIGINT          NOT NULL,
-    order_date_key      INTEGER         NOT NULL,
-    customer_key        INTEGER,
-    product_key         INTEGER         NOT NULL,
-    territory_key       INTEGER,
-    order_channel_key   INTEGER         NOT NULL DEFAULT 1,
-    payment_method_key  INTEGER,
-    geography_key       INTEGER,
-    delivery_method_key INTEGER,
-    order_qty           SMALLINT        NOT NULL,
-    unit_price          NUMERIC(19,4)   NOT NULL,
-    unit_price_discount NUMERIC(19,4)   NOT NULL DEFAULT 0,
-    line_total          NUMERIC(19,4)   NOT NULL,
-    sub_total           NUMERIC(19,4),
-    tax_amt             NUMERIC(19,4),
-    freight             NUMERIC(19,4),
-    total_due           NUMERIC(19,4),
-    CONSTRAINT pk_fact_online_sales PRIMARY KEY (sales_order_key)
+    order_key           VARCHAR(20)   NOT NULL,
+    order_line_number   SMALLINT      NOT NULL,
+    customer_key        BIGINT,
+    product_key         INTEGER       NOT NULL,
+    sales_territory_key SMALLINT,
+    channel_key         SMALLINT      NOT NULL DEFAULT 1,
+    payment_method_key  SMALLINT,
+    delivery_method_key SMALLINT,
+    order_date_key      INTEGER       NOT NULL,
+    ship_date_key       INTEGER,
+    quantity            SMALLINT      NOT NULL,
+    catalog_price       NUMERIC(7,2)  NOT NULL,
+    discount_amount     NUMERIC(7,2)  NOT NULL DEFAULT 0,
+    discount_pctg       SMALLINT      NOT NULL DEFAULT 0,
+    transaction_price   NUMERIC(7,2)  NOT NULL,
+    delivery_cost       NUMERIC(5,2),
+    product_cost        NUMERIC(5,2),
+    CONSTRAINT pk_fact_online_sales PRIMARY KEY (order_key, order_line_number)
 );
