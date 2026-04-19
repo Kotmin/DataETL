@@ -1,38 +1,16 @@
 from __future__ import annotations
 
-import os
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
-import pyodbc
-import psycopg2
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 
+from connections import mssql_conn as _mssql_conn, pg_conn as _pg_conn
+
 REPO_ROOT = Path(__file__).parents[2]
 EXTRACT_SQL = (REPO_ROOT / "sql" / "source" / "extract_fact_online_sales.sql").read_text()
-
-
-def _mssql_conn():
-    dsn = (
-        "DRIVER={ODBC Driver 18 for SQL Server};"
-        f"SERVER={os.environ['MSSQL_HOST']},{os.environ['MSSQL_PORT']};"
-        f"DATABASE={os.environ['MSSQL_DB']};"
-        f"UID=sa;PWD={os.environ['MSSQL_SA_PASSWORD']};"
-        "TrustServerCertificate=yes;"
-    )
-    return pyodbc.connect(dsn)
-
-
-def _pg_conn():
-    return psycopg2.connect(
-        host=os.environ["PG_HOST"],
-        port=os.environ["PG_PORT"],
-        dbname=os.environ["PG_DB"],
-        user=os.environ["PG_USER"],
-        password=os.environ["PG_PASSWORD"],
-    )
 
 
 def _to_date_key(val):

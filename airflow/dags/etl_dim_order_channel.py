@@ -1,36 +1,16 @@
 from __future__ import annotations
 
-import os
 from datetime import datetime
 
-import pyodbc
-import psycopg2
 from airflow import DAG
 from airflow.operators.python import PythonOperator
+
+from connections import mssql_conn as _mssql_conn, pg_conn as _pg_conn
 
 _CHANNEL_MAP = {
     1: {"order_channel_key": 1, "channel_name": "Online",   "online_flag": True},
     0: {"order_channel_key": 2, "channel_name": "In-Store", "online_flag": False},
 }
-
-
-def _mssql_conn():
-    dsn = (
-        "DRIVER={ODBC Driver 18 for SQL Server};"
-        f"SERVER={os.environ['MSSQL_HOST']},{os.environ['MSSQL_PORT']};"
-        f"DATABASE={os.environ['MSSQL_DB']};"
-        f"UID=sa;PWD={os.environ['MSSQL_SA_PASSWORD']};"
-        "TrustServerCertificate=yes;"
-    )
-    return pyodbc.connect(dsn)
-
-
-def _pg_conn():
-    return psycopg2.connect(
-        host=os.environ["PG_HOST"], port=os.environ["PG_PORT"],
-        dbname=os.environ["PG_DB"], user=os.environ["PG_USER"],
-        password=os.environ["PG_PASSWORD"],
-    )
 
 
 def extract(**context):
