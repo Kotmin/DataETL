@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS fact.fact_online_sales (
     discount_amount     NUMERIC(7,2)  NOT NULL DEFAULT 0,
     discount_pctg       SMALLINT      NOT NULL DEFAULT 0,
     transaction_price   NUMERIC(7,2)  NOT NULL,
-    delivery_cost       NUMERIC(5,2),
-    product_cost        NUMERIC(5,2),
+    delivery_cost       NUMERIC(7,2),
+    product_cost        NUMERIC(8,2),
     CONSTRAINT pk_fact_online_sales PRIMARY KEY (order_key, order_line_number)
 );

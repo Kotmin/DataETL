@@ -243,8 +243,8 @@ TOP 1 by `AddressTypeID` selects a deterministic primary address per customer.
 | `discount_amount` | NUMERIC(7,2) NOT NULL | Computed | `UnitPrice`, `UnitPriceDiscount` | `round(UnitPrice × UnitPriceDiscount, 2)` |
 | `discount_pctg` | SMALLINT NOT NULL | Computed | `UnitPriceDiscount` | `round(UnitPriceDiscount × 100)` as integer % |
 | `transaction_price` | NUMERIC(7,2) NOT NULL | Computed | `UnitPrice`, `UnitPriceDiscount` | `round(UnitPrice × (1 − UnitPriceDiscount), 2)` |
-| `delivery_cost` | NUMERIC(5,2) NOT NULL | Computed | `Freight`, `LineTotal`, `SubTotal` | `round(Freight × LineTotal / OrderSubTotal, 2)`; proportional per line |
-| `product_cost` | NUMERIC(5,2) NOT NULL | OUTER APPLY | `ProductCostHistory.StandardCost` | Effective-date lookup; fallback `Production.Product.StandardCost` |
+| `delivery_cost` | NUMERIC(7,2) NOT NULL | Computed | `Freight`, `LineTotal`, `SubTotal` | `round(Freight × LineTotal / OrderSubTotal, 2)`; proportional per line |
+| `product_cost` | NUMERIC(8,2) NOT NULL | OUTER APPLY | `ProductCostHistory.StandardCost` | Effective-date lookup; fallback `Production.Product.StandardCost`; widened from spec NUMBER(5,2) — AW bikes exceed 999.99 |
 
 ### Join Strategy
 
