@@ -1,13 +1,19 @@
 SELECT
     c.CustomerID,
-    c.AccountNumber,
     p.FirstName,
     p.LastName,
-    TRIM(COALESCE(p.FirstName + ' ', '') + COALESCE(p.LastName, '')) AS FullName,
-    c.TerritoryID,
-    st.Name AS TerritoryName
+    addr.City,
+    sp.StateProvinceCode,
+    sp.CountryRegionCode
 FROM Sales.Customer AS c
 LEFT JOIN Person.Person AS p
     ON c.PersonID = p.BusinessEntityID
-LEFT JOIN Sales.SalesTerritory AS st
-    ON c.TerritoryID = st.TerritoryID
+OUTER APPLY (
+    SELECT TOP 1 a.AddressID, a.StateProvinceID
+    FROM Person.BusinessEntityAddress AS bea
+    JOIN Person.Address               AS a ON bea.AddressID = a.AddressID
+    WHERE bea.BusinessEntityID = c.PersonID
+    ORDER BY bea.AddressTypeID
+) AS addr
+LEFT JOIN Person.StateProvince AS sp
+    ON addr.StateProvinceID = sp.StateProvinceID
