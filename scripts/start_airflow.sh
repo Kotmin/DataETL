@@ -14,6 +14,8 @@ set -a
 source "${REPO_ROOT}/.env"
 set +a
 
+export PATH="${VENV}:${PATH}"
+
 export AIRFLOW_HOME="${REPO_ROOT}/airflow"
 export AIRFLOW__CORE__DAGS_FOLDER="${REPO_ROOT}/airflow/dags"
 export AIRFLOW__CORE__LOAD_EXAMPLES=False
