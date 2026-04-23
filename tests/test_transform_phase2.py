@@ -35,8 +35,8 @@ def _run(fn, raw_rows):
 def _run_customer(raw_rows):
     mock_cursor = MagicMock()
     mock_cursor.fetchall.return_value = [
-        ("Seattle", "WA", "US", 42),
-        ("Paris",   "75", "FR", 7),
+        ("Seattle", "US", 42),
+        ("Paris",   "FR", 7),
     ]
     mock_conn = MagicMock()
     mock_conn.cursor.return_value.__enter__ = lambda s: mock_cursor
