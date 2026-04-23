@@ -30,8 +30,6 @@ def transform(**context):
         {
             "delivery_method_key":  row["DeliveryMethodKey"],
             "delivery_method_name": (row["DeliveryMethodName"] or "").strip(),
-            "ship_base":            float(row["ShipBase"]) if row["ShipBase"] is not None else None,
-            "ship_rate":            float(row["ShipRate"]) if row["ShipRate"] is not None else None,
         }
         for row in raw_rows
     ]
@@ -47,10 +45,9 @@ def load(**context):
             cur.executemany(
                 """
                 INSERT INTO dim.dim_delivery_method
-                    (delivery_method_key, delivery_method_name, ship_base, ship_rate)
+                    (delivery_method_key, delivery_method_name)
                 VALUES
-                    (%(delivery_method_key)s, %(delivery_method_name)s,
-                     %(ship_base)s, %(ship_rate)s)
+                    (%(delivery_method_key)s, %(delivery_method_name)s)
                 """,
                 rows,
             )

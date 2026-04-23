@@ -91,8 +91,6 @@ JOIN Person.CountryRegion AS cr ON st.CountryRegionCode = cr.CountryRegionCode
 |---|---|---|---|---|
 | `delivery_method_key` | SMALLINT NOT NULL PK | `Purchasing.ShipMethod` | `ShipMethodID` | Natural key |
 | `delivery_method_name` | VARCHAR(20) NOT NULL | `Purchasing.ShipMethod` | `Name` | TRIM |
-| `ship_base` | NUMERIC(19,4) | `Purchasing.ShipMethod` | `ShipBase` | Direct cast |
-| `ship_rate` | NUMERIC(19,4) | `Purchasing.ShipMethod` | `ShipRate` | Direct cast |
 
 ---
 
