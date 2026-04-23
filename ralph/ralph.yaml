@@ -1,0 +1,20 @@
+project: AdventureWorks ETL Teaching Lab
+prd: PRD.md
+merge_into: main
+
+runner:
+  test: ".venv/bin/pytest tests/ -v"
+  build: "docker compose -f docker/docker-compose.yml ps"
+  dev: "./scripts/start_airflow.sh"
+
+# known_test_failures:
+#   - "tests/test_load.py"   # integration tests require completed DAG run
+
+parallel:
+  agents:
+    - label: branch-master
+      task: git-hygiene
+      batch: 1
+    - label: hypervisor
+      task: env-health
+      batch: 1

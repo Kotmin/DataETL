@@ -1,0 +1,44 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2025-CU4-ubuntu-24.04
+    user: root
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD}"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql/data
+      - ../db-seed:/backups:ro
+      - ./sqlserver/init:/init:ro
+    entrypoint: ["/bin/bash", "/init/restore.sh"]
+    healthcheck:
+      test: >
+        /opt/mssql-tools18/bin/sqlcmd
+        -S localhost -U sa -P "${MSSQL_SA_PASSWORD}"
+        -Q "SELECT 1" -C -b
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+
+  postgres:
+    image: postgres:18.3-alpine
+    environment:
+      POSTGRES_USER: "${PG_USER}"
+      POSTGRES_PASSWORD: "${PG_PASSWORD}"
+      POSTGRES_DB: "${PG_DB}"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER} -d ${PG_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  sqlserver-data:
+  postgres-data:
