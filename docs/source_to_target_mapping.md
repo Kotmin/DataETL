@@ -119,7 +119,7 @@ JOIN Person.CountryRegion AS cr ON st.CountryRegionCode = cr.CountryRegionCode
 |---|---|
 | Target table | `dim.dim_geography` |
 | Source system | MSSQL — `Person.Address` JOIN `Person.StateProvince` JOIN `Person.CountryRegion` |
-| Grain | Distinct `(City, StateProvinceCode, CountryRegionCode)` |
+| Grain | Distinct `(City, CountryRegionCode)` |
 | Load pattern | Full reload (TRUNCATE + INSERT) |
 
 ### Column Mapping
@@ -132,8 +132,6 @@ JOIN Person.CountryRegion AS cr ON st.CountryRegionCode = cr.CountryRegionCode
 | `country_code` | CHAR(2) NOT NULL | `Person.StateProvince` | `CountryRegionCode` | TRIM |
 | `city_key` | SMALLINT NOT NULL | Computed | same as `geography_key` | Equals `geography_key` (grain is city-scoped) |
 | `city_name` | VARCHAR(30) NOT NULL | `Person.Address` | `City` | TRIM |
-| `state_province_code` | VARCHAR(3) | `Person.StateProvince` | `StateProvinceCode` | Direct |
-| `state_province_name` | VARCHAR(50) | `Person.StateProvince` | `Name` | Direct |
 | `sales_territory_key` | SMALLINT FK | `Person.StateProvince` | `TerritoryID` | FK → `dim.dim_sales_territory` |
 
 ### Join Strategy
@@ -144,7 +142,7 @@ JOIN Person.StateProvince AS sp ON a.StateProvinceID = sp.StateProvinceID
 JOIN Person.CountryRegion AS cr ON sp.CountryRegionCode = cr.CountryRegionCode
 ```
 
-**FK resolution in customer:** `etl_dim_customer.transform` queries `dim.dim_geography` at runtime on `(city_name, state_province_code, country_code)`. `etl_dim_geography` must run before `etl_dim_customer`.
+**FK resolution in customer:** `etl_dim_customer.transform` queries `dim.dim_geography` at runtime on `(city_name, country_code)`. `etl_dim_geography` must run before `etl_dim_customer`.
 
 ---
 
@@ -193,7 +191,7 @@ LEFT JOIN Production.ProductCategory    AS pc ON ps.ProductCategoryID    = pc.Pr
 | `customer_key` | BIGINT NOT NULL PK | `Sales.Customer` | `CustomerID` | Direct cast |
 | `first_name` | VARCHAR(25) NULLABLE | `Person.Person` | `FirstName` | NULL if no Person row |
 | `last_name` | VARCHAR(45) NULLABLE | `Person.Person` | `LastName` | NULL if no Person row |
-| `geography_key` | SMALLINT FK NULLABLE | PG lookup | `dim.dim_geography` | Resolved at transform time via `(city_name, state_province_code, country_code)`; NULL if no address |
+| `geography_key` | SMALLINT FK NULLABLE | PG lookup | `dim.dim_geography` | Resolved at transform time via `(city_name, country_code)`; NULL if no address |
 
 ### Address Resolution
 

@@ -100,7 +100,7 @@ Oracle NUMBER types → PostgreSQL: `NUMBER(1-3)=SMALLINT`, `NUMBER(5)=INTEGER`,
 | File | `airflow/dags/etl_dim_geography.py` |
 | Target | `dim.dim_geography` |
 | Source | `Person.Address` (distinct City+StateProvinceID) JOIN `Person.StateProvince` JOIN `Person.CountryRegion` |
-| Grain | Distinct `(City, StateProvinceCode, CountryRegionCode)` |
+| Grain | Distinct `(City, CountryRegionCode)` |
 | Key | `ROW_NUMBER()` surrogate; `CountryKey` = DENSE_RANK on country |
 | Key columns | `geography_key`, `country_key`, `city_key`, `sales_territory_key` FK |
 
@@ -128,7 +128,7 @@ Oracle NUMBER types → PostgreSQL: `NUMBER(1-3)=SMALLINT`, `NUMBER(5)=INTEGER`,
 | Source | `Sales.Customer` LEFT JOIN `Person.Person` OUTER APPLY address → StateProvince |
 | Key columns | `geography_key` FK (resolved via PG lookup); no `account_number`, no `full_name` |
 
-**FK resolution:** Transform queries `dim.dim_geography` in PG on `(city_name, state_province_code, country_code)`.
+**FK resolution:** Transform queries `dim.dim_geography` in PG on `(city_name, country_code)`.
 
 ---
 
