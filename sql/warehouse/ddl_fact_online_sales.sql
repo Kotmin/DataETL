@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS fact.fact_online_sales (
-    order_key           VARCHAR(20)   NOT NULL,
+    order_key           VARCHAR(10)   NOT NULL,
     order_line_number   SMALLINT      NOT NULL,
     customer_key        BIGINT,
     product_key         INTEGER       NOT NULL,

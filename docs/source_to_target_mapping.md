@@ -224,7 +224,7 @@ TOP 1 by `AddressTypeID` selects a deterministic primary address per customer.
 
 | Target Column | Type | Source Table | Source Column | Transform |
 |---|---|---|---|---|
-| `order_key` | VARCHAR(20) NOT NULL PK1 | `Sales.SalesOrderHeader` | `SalesOrderNumber` | Direct (`"SO43659"` format) |
+| `order_key` | VARCHAR(10) NOT NULL PK1 | `Sales.SalesOrderHeader` | `SalesOrderNumber` | Direct (`"SO43659"` format) |
 | `order_line_number` | SMALLINT NOT NULL PK2 | Computed | `SalesOrderDetailID` | `ROW_NUMBER() OVER (PARTITION BY SalesOrderID ORDER BY SalesOrderDetailID)` |
 | `customer_key` | BIGINT NULLABLE | `Sales.SalesOrderHeader` | `CustomerID` | FK → `dim.dim_customer` |
 | `product_key` | INTEGER NOT NULL | `Sales.SalesOrderDetail` | `ProductID` | FK → `dim.dim_product` |
