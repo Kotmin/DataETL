@@ -46,7 +46,6 @@ Type convention: `NUMBER(1-3)→SMALLINT`, `NUMBER(5)→INTEGER`, `NUMBER(8)→I
 |---|---|---|---|---|
 | `order_channel_key` | SMALLINT NOT NULL PK | `Sales.SalesOrderHeader` | `OnlineOrderFlag` | `1→1 (Online)`, `0→2 (In-Store)` |
 | `channel_name` | VARCHAR(20) NOT NULL | Derived | `OnlineOrderFlag` | `1→'Online'`, `0→'In-Store'` |
-| `online_flag` | BOOLEAN NOT NULL | Derived | `OnlineOrderFlag` | Cast to boolean |
 
 ---
 

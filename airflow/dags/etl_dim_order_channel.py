@@ -8,8 +8,8 @@ from airflow.providers.standard.operators.python import PythonOperator
 from connections import MSSQLParams, PGParams, mssql_conn, pg_conn
 
 _CHANNEL_MAP = {
-    1: {"order_channel_key": 1, "channel_name": "Online",   "online_flag": True},
-    0: {"order_channel_key": 2, "channel_name": "In-Store", "online_flag": False},
+    1: {"order_channel_key": 1, "channel_name": "Online"},
+    0: {"order_channel_key": 2, "channel_name": "In-Store"},
 }
 
 
@@ -39,9 +39,9 @@ def load(**context):
             cur.executemany(
                 """
                 INSERT INTO dim.dim_order_channel
-                    (order_channel_key, channel_name, online_flag)
+                    (order_channel_key, channel_name)
                 VALUES
-                    (%(order_channel_key)s, %(channel_name)s, %(online_flag)s)
+                    (%(order_channel_key)s, %(channel_name)s)
                 """,
                 rows,
             )
