@@ -38,7 +38,7 @@ def generate_and_load(**_):
             "calendar_quarter":     (current.month - 1) // 3 + 1,
             "month_number_of_year": current.month,
             "month_name":           _MONTH_NAMES[current.month - 1],
-            "week_number_of_year":  int(current.strftime("%W")),
+            "week_number_of_year":  int(current.strftime("%V")),
             "day_number_of_year":   current.timetuple().tm_yday,
             "day_number_of_month":  current.day,
             "day_number_of_week":   current.weekday() + 1,
