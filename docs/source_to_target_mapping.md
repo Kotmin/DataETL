@@ -23,7 +23,7 @@ Type convention: `NUMBER(1-3)→SMALLINT`, `NUMBER(5)→INTEGER`, `NUMBER(8)→I
 | `calendar_quarter` | SMALLINT NOT NULL | Generated | `(month - 1) // 3 + 1` |
 | `month_number_of_year` | SMALLINT NOT NULL | Generated | `date.month` |
 | `month_name` | VARCHAR(12) NOT NULL | Generated | Locale month name |
-| `week_number_of_year` | SMALLINT NOT NULL | Generated | `strftime("%W")` Monday-based |
+| `week_number_of_year` | SMALLINT NOT NULL | Generated | `strftime("%V")` ISO 8601 week (1–53, Monday-based; no week 0) |
 | `day_number_of_year` | SMALLINT NOT NULL | Generated | `date.timetuple().tm_yday` |
 | `day_number_of_month` | SMALLINT NOT NULL | Generated | `date.day` |
 | `day_number_of_week` | SMALLINT NOT NULL | Generated | `weekday() + 1` (1=Mon, 7=Sun) |
@@ -125,7 +125,7 @@ JOIN Person.CountryRegion AS cr ON st.CountryRegionCode = cr.CountryRegionCode
 
 | Target Column | Type | Source Table | Source Column | Transform |
 |---|---|---|---|---|
-| `geography_key` | SMALLINT NOT NULL PK | Computed | `(City, StateProvinceID)` DISTINCT | `ROW_NUMBER() OVER (ORDER BY CountryCode, StateCode, City)` |
+| `geography_key` | SMALLINT NOT NULL PK | Computed | `(City, CountryRegionCode)` DISTINCT | `ROW_NUMBER() OVER (ORDER BY CountryCode, City)` |
 | `country_key` | SMALLINT NOT NULL | Computed | `CountryRegionCode` | `DENSE_RANK() OVER (ORDER BY CountryRegionCode)` |
 | `country_name` | VARCHAR(50) NOT NULL | `Person.CountryRegion` | `Name` | TRIM |
 | `country_code` | CHAR(2) NOT NULL | `Person.StateProvince` | `CountryRegionCode` | TRIM |
@@ -234,10 +234,10 @@ TOP 1 by `AddressTypeID` selects a deterministic primary address per customer.
 | `order_date_key` | INTEGER NOT NULL | `Sales.SalesOrderHeader` | `OrderDate` | `YYYYMMDD` integer; FK → `dim.dim_date` |
 | `ship_date_key` | INTEGER NULLABLE | `Sales.SalesOrderHeader` | `ShipDate` | `YYYYMMDD` integer; NULL if `ShipDate IS NULL` |
 | `quantity` | SMALLINT NOT NULL | `Sales.SalesOrderDetail` | `OrderQty` | Direct cast |
-| `catalog_price` | NUMERIC(7,2) NOT NULL | `Sales.SalesOrderDetail` | `UnitPrice` | `round(UnitPrice, 2)` |
+| `catalog_price` | NUMERIC(7,2) NOT NULL | `Sales.SalesOrderDetail` | `UnitPrice` | `round(UnitPrice, 2)` — **non-additive**; use AVG or as a filter, not SUM |
 | `discount_amount` | NUMERIC(7,2) NOT NULL | Computed | `UnitPrice`, `UnitPriceDiscount` | `round(UnitPrice × UnitPriceDiscount, 2)` |
-| `discount_pctg` | SMALLINT NOT NULL | Computed | `UnitPriceDiscount` | `round(UnitPriceDiscount × 100)` as integer % |
-| `transaction_price` | NUMERIC(7,2) NOT NULL | Computed | `UnitPrice`, `UnitPriceDiscount` | `round(UnitPrice × (1 − UnitPriceDiscount), 2)` |
+| `discount_pctg` | SMALLINT NOT NULL | Computed | `UnitPriceDiscount` | `round(UnitPriceDiscount × 100)` as integer % — **non-additive**; rounded to nearest %, use AVG not SUM |
+| `transaction_price` | NUMERIC(7,2) NOT NULL | Computed | `UnitPrice`, `UnitPriceDiscount` | `round(UnitPrice × (1 − UnitPriceDiscount), 2)` — **non-additive**; multiply by `quantity` first to get line revenue |
 | `delivery_cost` | NUMERIC(7,2) NOT NULL | Computed | `Freight`, `LineTotal`, `SubTotal` | `round(Freight × LineTotal / OrderSubTotal, 2)`; proportional per line |
 | `product_cost` | NUMERIC(8,2) NOT NULL | OUTER APPLY | `ProductCostHistory.StandardCost` | Effective-date lookup; fallback `Production.Product.StandardCost`; widened from spec NUMBER(5,2) — AW bikes exceed 999.99 |
 
