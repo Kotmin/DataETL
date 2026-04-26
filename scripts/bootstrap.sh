@@ -52,8 +52,16 @@ echo "[4/6] Starting Docker containers..."
 ${COMPOSE} up -d
 
 echo "  Waiting for containers to be healthy (SQL Server restore may take ~120s)..."
-${COMPOSE} wait sqlserver postgres 2>/dev/null || \
-    ${COMPOSE} up -d --wait 2>/dev/null || true
+for i in $(seq 1 36); do
+    PG_STATUS=$(docker inspect docker-postgres-1  --format '{{.State.Health.Status}}' 2>/dev/null || echo "unknown")
+    SQL_STATUS=$(docker inspect docker-sqlserver-1 --format '{{.State.Health.Status}}' 2>/dev/null || echo "unknown")
+    if [ "${PG_STATUS}" = "healthy" ] && [ "${SQL_STATUS}" = "healthy" ]; then
+        echo "  Both containers healthy."
+        break
+    fi
+    echo "  [${i}/36] postgres=${PG_STATUS}  sqlserver=${SQL_STATUS} — retrying in 10s..."
+    sleep 10
+done
 
 # ── 5. Airflow initialisation ───────────────────────────────────────────────
 echo "[5/6] Initialising Airflow..."
