@@ -241,6 +241,21 @@ TOP 1 by `AddressTypeID` selects a deterministic primary address per customer.
 | `delivery_cost` | NUMERIC(7,2) NOT NULL | Computed | `Freight`, `LineTotal`, `SubTotal` | `round(Freight × LineTotal / OrderSubTotal, 2)`; proportional per line |
 | `product_cost` | NUMERIC(8,2) NOT NULL | OUTER APPLY | `ProductCostHistory.StandardCost` | Effective-date lookup; fallback `Production.Product.StandardCost`; widened from spec NUMBER(5,2) — AW bikes exceed 999.99 |
 
+### FK Constraints
+
+| Constraint | Fact Column | References |
+|---|---|---|
+| `fk_fact_customer` | `customer_key` | `dim.dim_customer(customer_key)` — NULLABLE |
+| `fk_fact_product` | `product_key` | `dim.dim_product(product_key)` — NOT NULL |
+| `fk_fact_sales_territory` | `sales_territory_key` | `dim.dim_sales_territory(sales_territory_key)` — NULLABLE |
+| `fk_fact_channel` | `channel_key` | `dim.dim_order_channel(order_channel_key)` — NOT NULL |
+| `fk_fact_payment_method` | `payment_method_key` | `dim.dim_payment_method(payment_method_key)` — NULLABLE |
+| `fk_fact_delivery_method` | `delivery_method_key` | `dim.dim_delivery_method(delivery_method_key)` — NULLABLE |
+| `fk_fact_order_date` | `order_date_key` | `dim.dim_date(date_key)` — NOT NULL |
+| `fk_fact_ship_date` | `ship_date_key` | `dim.dim_date(date_key)` — NULLABLE |
+
+All dims must be loaded before the fact. Dim TRUNCATEs use `CASCADE` which propagates to this table.
+
 ### Join Strategy
 
 ```sql

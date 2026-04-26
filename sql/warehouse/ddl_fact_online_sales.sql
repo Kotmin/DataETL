@@ -16,5 +16,13 @@ CREATE TABLE IF NOT EXISTS fact.fact_online_sales (
     transaction_price   NUMERIC(7,2)  NOT NULL,
     delivery_cost       NUMERIC(7,2),
     product_cost        NUMERIC(8,2),
-    CONSTRAINT pk_fact_online_sales PRIMARY KEY (order_key, order_line_number)
+    CONSTRAINT pk_fact_online_sales          PRIMARY KEY (order_key, order_line_number),
+    CONSTRAINT fk_fact_customer              FOREIGN KEY (customer_key)        REFERENCES dim.dim_customer(customer_key),
+    CONSTRAINT fk_fact_product               FOREIGN KEY (product_key)         REFERENCES dim.dim_product(product_key),
+    CONSTRAINT fk_fact_sales_territory       FOREIGN KEY (sales_territory_key) REFERENCES dim.dim_sales_territory(sales_territory_key),
+    CONSTRAINT fk_fact_channel               FOREIGN KEY (channel_key)         REFERENCES dim.dim_order_channel(order_channel_key),
+    CONSTRAINT fk_fact_payment_method        FOREIGN KEY (payment_method_key)  REFERENCES dim.dim_payment_method(payment_method_key),
+    CONSTRAINT fk_fact_delivery_method       FOREIGN KEY (delivery_method_key) REFERENCES dim.dim_delivery_method(delivery_method_key),
+    CONSTRAINT fk_fact_order_date            FOREIGN KEY (order_date_key)      REFERENCES dim.dim_date(date_key),
+    CONSTRAINT fk_fact_ship_date             FOREIGN KEY (ship_date_key)       REFERENCES dim.dim_date(date_key)
 );
