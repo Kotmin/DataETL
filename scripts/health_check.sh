@@ -21,7 +21,7 @@ MSSQL_STATUS=$(docker inspect --format='{{.State.Health.Status}}' \
 [ "${MSSQL_STATUS}" != "healthy" ] && ISSUES+=("sqlserver: ${MSSQL_STATUS}")
 
 curl -s http://localhost:8080/api/v2/monitor/health > /dev/null 2>&1 || ISSUES+=("airflow api-server: DOWN")
-pgrep -f "airflow (scheduler|standalone)" > /dev/null 2>&1 || ISSUES+=("airflow scheduler: DOWN")
+pgrep -E -f "airflow (scheduler|standalone)" > /dev/null 2>&1 || ISSUES+=("airflow scheduler: DOWN")
 
 if [ ${#ISSUES[@]} -eq 0 ]; then
     echo "${TIMESTAMP} [OK] All services healthy"
