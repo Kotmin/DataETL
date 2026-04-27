@@ -5,6 +5,7 @@ from pathlib import Path
 
 from airflow import DAG
 from airflow.providers.standard.operators.python import PythonOperator
+from airflow.sensors.external_task import ExternalTaskSensor
 
 from connections import MSSQLParams, PGParams, mssql_conn, pg_conn
 
@@ -91,8 +92,18 @@ with DAG(
     tags=["dim", "customer"],
 ) as dag:
 
+    wait_for_geography = ExternalTaskSensor(
+        task_id="wait_for_dim_geography",
+        external_dag_id="etl_dim_geography",
+        external_task_id="load_dim_geography",
+        execution_date_fn=lambda dt: dt.replace(hour=3, minute=0, second=0, microsecond=0),
+        mode="reschedule",
+        poke_interval=60,
+        timeout=3600,
+    )
+
     extract_task = PythonOperator(task_id="extract_dim_customer", python_callable=extract)
     transform_task = PythonOperator(task_id="transform_dim_customer", python_callable=transform)
     load_task = PythonOperator(task_id="load_dim_customer", python_callable=load)
 
-    extract_task >> transform_task >> load_task
+    wait_for_geography >> extract_task >> transform_task >> load_task
