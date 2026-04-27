@@ -46,15 +46,17 @@ source "${REPO_ROOT}/.env"
 set +a
 
 # ── 4. Docker containers ────────────────────────────────────────────────────
-COMPOSE="docker compose -f ${REPO_ROOT}/docker/docker-compose.yml --env-file ${REPO_ROOT}/.env"
+COMPOSE=(docker compose -f "${REPO_ROOT}/docker/docker-compose.yml" --env-file "${REPO_ROOT}/.env")
 
 echo "[4/6] Starting Docker containers..."
-${COMPOSE} up -d
+"${COMPOSE[@]}" up -d
 
 echo "  Waiting for containers to be healthy (SQL Server restore may take ~120s)..."
 for i in $(seq 1 36); do
-    PG_STATUS=$(docker inspect docker-postgres-1  --format '{{.State.Health.Status}}' 2>/dev/null || echo "unknown")
-    SQL_STATUS=$(docker inspect docker-sqlserver-1 --format '{{.State.Health.Status}}' 2>/dev/null || echo "unknown")
+    PG_STATUS=$(docker inspect --format='{{.State.Health.Status}}' \
+        "$("${COMPOSE[@]}" ps -q postgres 2>/dev/null)" 2>/dev/null || echo "unknown")
+    SQL_STATUS=$(docker inspect --format='{{.State.Health.Status}}' \
+        "$("${COMPOSE[@]}" ps -q sqlserver 2>/dev/null)" 2>/dev/null || echo "unknown")
     if [ "${PG_STATUS}" = "healthy" ] && [ "${SQL_STATUS}" = "healthy" ]; then
         echo "  Both containers healthy."
         break
