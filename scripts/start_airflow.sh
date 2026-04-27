@@ -33,7 +33,7 @@ echo "${AIRFLOW_PID}" > "${REPO_ROOT}/airflow/airflow.pid"
 
 echo "Waiting for API server to be ready..."
 for i in $(seq 1 30); do
-    curl -s http://localhost:8080/health > /dev/null 2>&1 && break
+    curl -s http://localhost:8080/api/v2/monitor/health > /dev/null 2>&1 && break
     sleep 2
 done
 
