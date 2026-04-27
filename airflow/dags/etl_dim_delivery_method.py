@@ -28,7 +28,7 @@ def transform(**context):
     raw_rows = context["ti"].xcom_pull(task_ids="extract_dim_delivery_method", key="raw_rows")
     transformed = [
         {
-            "delivery_method_key":  row["DeliveryMethodKey"],
+            "delivery_method_key":  int(row["DeliveryMethodKey"]),
             "delivery_method_name": (row["DeliveryMethodName"] or "").strip(),
         }
         for row in raw_rows
