@@ -50,6 +50,9 @@ def load(**context):
         conn.commit()
     finally:
         conn.close()
+
+    if count == 0:
+        raise ValueError("Load produced 0 rows in dim.dim_order_channel")
     print(f"Loaded {count} rows into dim.dim_order_channel")
 
 
