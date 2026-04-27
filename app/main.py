@@ -137,6 +137,10 @@ def cmd_export(args: argparse.Namespace) -> None:
 
 
 def cmd_airflow_trigger(args: argparse.Namespace) -> None:
+    print(
+        "WARNING: triggers are asynchronous — Airflow may run DAGs in parallel.\n"
+        "         For guaranteed sequential execution use: python app/main.py run --all"
+    )
     airflow_bin = REPO_ROOT / ".venv" / "bin" / "airflow"
     env = {**os.environ, "AIRFLOW_HOME": str(REPO_ROOT / "airflow")}
 
