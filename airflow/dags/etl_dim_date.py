@@ -50,7 +50,7 @@ def generate_and_load(**_):
     pg = pg_conn(PGParams.from_env())
     try:
         with pg.cursor() as cur:
-            cur.execute("TRUNCATE TABLE dim.dim_date")
+            cur.execute("TRUNCATE TABLE dim.dim_date CASCADE")
             cur.executemany(
                 """INSERT INTO dim.dim_date VALUES
                    (%(date_key)s,%(full_date)s,%(calendar_year)s,%(calendar_quarter)s,
