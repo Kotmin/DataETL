@@ -17,7 +17,10 @@ docker compose -f "${REPO_ROOT}/docker/docker-compose.yml" --env-file "${REPO_RO
     docker compose -f "${REPO_ROOT}/docker/docker-compose.yml" down -v
 
 echo "Removing Airflow state..."
-rm -f "${REPO_ROOT}/airflow/airflow.db"
+rm -f "${REPO_ROOT}/airflow/airflow.db" \
+       "${REPO_ROOT}/airflow/airflow.db-shm" \
+       "${REPO_ROOT}/airflow/airflow.db-wal" \
+       "${REPO_ROOT}/airflow/airflow.pid"
 rm -rf "${REPO_ROOT}/airflow/logs"
 
 echo "Done. Run ./scripts/bootstrap.sh to rebuild the environment."
