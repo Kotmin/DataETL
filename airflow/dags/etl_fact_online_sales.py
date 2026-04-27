@@ -6,7 +6,7 @@ from pathlib import Path
 
 from airflow import DAG
 from airflow.providers.standard.operators.python import PythonOperator
-from airflow.sensors.external_task import ExternalTaskSensor
+from airflow.providers.standard.sensors.external_task import ExternalTaskSensor
 
 from connections import MSSQLParams, PGParams, mssql_conn, pg_conn
 
