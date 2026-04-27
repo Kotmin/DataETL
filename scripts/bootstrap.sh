@@ -64,6 +64,10 @@ for i in $(seq 1 36); do
     echo "  [${i}/36] postgres=${PG_STATUS}  sqlserver=${SQL_STATUS} — retrying in 10s..."
     sleep 10
 done
+if [ "${PG_STATUS}" != "healthy" ] || [ "${SQL_STATUS}" != "healthy" ]; then
+    echo "ERROR: Containers did not reach healthy state. Check: docker compose logs"
+    exit 1
+fi
 
 # ── 5. Airflow initialisation ───────────────────────────────────────────────
 echo "[5/6] Initialising Airflow..."
@@ -97,6 +101,10 @@ try:
 except Exception as e: print(f'FAIL: {e}')
 ")
 echo "  SQL Server:  ${MSSQL_OK}"
+if [ "${PG_OK}" != "OK" ] || [ "${MSSQL_OK}" != "OK" ]; then
+    echo "ERROR: Connection verification failed — review .env and retry."
+    exit 1
+fi
 
 echo ""
 echo "=== Bootstrap complete ==="
