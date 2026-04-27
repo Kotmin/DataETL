@@ -22,7 +22,6 @@ class _FakeXCom:
 
 
 _PM_LOOKUP = {"None": 0, "ColonialVoice": 1, "Distinguish": 2, "SuperiorCard": 3, "Vista": 4}
-_GEOG_LOOKUP = {("seattle", "wa", "us"): 42, ("paris", "75", "fr"): 7}
 
 
 def _run(fn, raw_rows):
