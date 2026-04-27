@@ -9,7 +9,7 @@ Type convention: `NUMBER(1-3)→SMALLINT`, `NUMBER(5)→INTEGER`, `NUMBER(8)→I
 | Attribute | Value |
 |---|---|
 | Target table | `dim.dim_date` |
-| Source system | MSSQL — `Sales.SalesOrderHeader` (date range) + Python generation |
+| Source system | MSSQL — `Sales.SalesOrderHeader` (date range, `OnlineOrderFlag = 1`) + Python generation |
 | Load pattern | Full reload (TRUNCATE + INSERT) |
 | Range | `MIN(OrderDate) − 1 year` to `MAX(ShipDate) + 1 year` |
 
