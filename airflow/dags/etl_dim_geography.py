@@ -72,7 +72,7 @@ def load(**context):
 
 with DAG(
     dag_id="etl_dim_geography",
-    schedule="0 3 * * *",
+    schedule="0 4 * * *",
     start_date=datetime(2025, 1, 1),
     catchup=False,
     tags=["dim", "geography"],

@@ -64,7 +64,7 @@ def load(**context):
 
 with DAG(
     dag_id="etl_dim_payment_method",
-    schedule="0 2 * * 1",
+    schedule="0 4 * * *",
     start_date=datetime(2025, 1, 1),
     catchup=False,
     tags=["dim", "payment"],
