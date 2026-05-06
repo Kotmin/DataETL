@@ -9,6 +9,21 @@ A reproducible ETL lab that demonstrates OLTP → dimensional modeling using Adv
 - Python 3.12
 - ~4 GB RAM for containers
 
+## Source Database
+
+The AdventureWorks `.bak` file is **not included** in this repository (too large for Git). You must download it into `db-seed/` before running bootstrap.
+
+Official install guide: https://learn.microsoft.com/en-us/sql/samples/adventureworks-install-configure?view=sql-server-ver17&tabs=ssms
+
+```bash
+mkdir -p db-seed
+curl -L -o db-seed/AdventureWorks2025.bak \
+  https://github.com/Microsoft/sql-server-samples/releases/download/adventureworks/AdventureWorks2025.bak
+```
+
+> **Note:** the direct download URL above targets a specific GitHub release tag and may change. If it fails, find the latest `.bak` on the releases page:
+> https://github.com/Microsoft/sql-server-samples/releases/tag/adventureworks
+
 ## Quickstart
 
 ```bash
@@ -16,17 +31,21 @@ A reproducible ETL lab that demonstrates OLTP → dimensional modeling using Adv
 git clone <repo-url>
 cd DataETL
 
-# 2. Bootstrap (installs ODBC driver, creates venv, starts containers)
+# 2. Download the AdventureWorks backup (see "Source Database" above)
+mkdir -p db-seed && curl -L -o db-seed/AdventureWorks2025.bak \
+  https://github.com/Microsoft/sql-server-samples/releases/download/adventureworks/AdventureWorks2025.bak
+
+# 3. Bootstrap (installs ODBC driver, creates venv, starts containers)
 ./scripts/bootstrap.sh
 
-# 3. Start Airflow
+# 4. Start Airflow
 ./scripts/start_airflow.sh
 
-# 4. Open UI and trigger the DAG
+# 5. Open UI and trigger the DAG
 #    http://localhost:8080  (admin / admin)
 #    → Trigger: etl_dim_product
 
-# 5. Verify
+# 6. Verify
 source .env
 .venv/bin/pytest tests/test_transform.py tests/test_extract.py -v
 .venv/bin/pytest tests/test_load.py -v -m integration
