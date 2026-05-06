@@ -46,7 +46,7 @@ def load(**context):
     conn = pg_conn(PGParams.from_env())
     try:
         with conn.cursor() as cur:
-            cur.execute("TRUNCATE TABLE dim.dim_product")
+            cur.execute("TRUNCATE TABLE dim.dim_product CASCADE")
             cur.executemany(
                 """
                 INSERT INTO dim.dim_product

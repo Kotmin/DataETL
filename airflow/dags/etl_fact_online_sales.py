@@ -1,16 +1,27 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from airflow import DAG
 from airflow.providers.standard.operators.python import PythonOperator
+from airflow.providers.standard.sensors.external_task import ExternalTaskSensor
 
 from connections import MSSQLParams, PGParams, mssql_conn, pg_conn
 
 REPO_ROOT = Path(__file__).parents[2]
 EXTRACT_SQL = (REPO_ROOT / "sql" / "source" / "extract_fact_online_sales.sql").read_text()
+
+
+def _last_payment_method_dt(dt):
+    days_back = dt.weekday()
+    candidate = (dt - timedelta(days=days_back)).replace(
+        hour=2, minute=0, second=0, microsecond=0
+    )
+    if candidate > dt:
+        candidate -= timedelta(weeks=1)
+    return candidate
 
 
 def _to_date_key(val):
@@ -132,8 +143,18 @@ with DAG(
     tags=["fact", "sales"],
 ) as dag:
 
+    wait_for_payment_method = ExternalTaskSensor(
+        task_id="wait_for_dim_payment_method",
+        external_dag_id="etl_dim_payment_method",
+        external_task_id="load_dim_payment_method",
+        execution_date_fn=_last_payment_method_dt,
+        mode="reschedule",
+        poke_interval=60,
+        timeout=3600,
+    )
+
     extract_task = PythonOperator(task_id="extract_fact_online_sales", python_callable=extract)
     transform_task = PythonOperator(task_id="transform_fact_online_sales", python_callable=transform)
     load_task = PythonOperator(task_id="load_fact_online_sales", python_callable=load)
 
-    extract_task >> transform_task >> load_task
+    wait_for_payment_method >> extract_task >> transform_task >> load_task

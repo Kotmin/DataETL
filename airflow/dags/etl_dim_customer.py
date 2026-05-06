@@ -5,6 +5,7 @@ from pathlib import Path
 
 from airflow import DAG
 from airflow.providers.standard.operators.python import PythonOperator
+from airflow.providers.standard.sensors.external_task import ExternalTaskSensor
 
 from connections import MSSQLParams, PGParams, mssql_conn, pg_conn
 
@@ -31,11 +32,11 @@ def transform(**context):
     try:
         with pg.cursor() as cur:
             cur.execute("""
-                SELECT city_name, state_province_code, country_code, geography_key
+                SELECT city_name, country_code, geography_key
                 FROM dim.dim_geography
             """)
             geog_lookup = {
-                (row[0].strip().lower(), (row[1] or "").strip().lower(), row[2].strip().lower()): row[3]
+                (row[0].strip().lower(), row[1].strip().lower()): row[2]
                 for row in cur.fetchall()
             }
     finally:
@@ -44,9 +45,8 @@ def transform(**context):
     transformed = []
     for row in raw_rows:
         city = (row.get("City") or "").strip().lower()
-        sp   = (row.get("StateProvinceCode") or "").strip().lower()
         cc   = (row.get("CountryRegionCode") or "").strip().lower()
-        geography_key = geog_lookup.get((city, sp, cc)) if city else None
+        geography_key = geog_lookup.get((city, cc)) if city else None
         transformed.append(
             {
                 "customer_key":  int(row["CustomerID"]),
@@ -92,8 +92,18 @@ with DAG(
     tags=["dim", "customer"],
 ) as dag:
 
+    wait_for_geography = ExternalTaskSensor(
+        task_id="wait_for_dim_geography",
+        external_dag_id="etl_dim_geography",
+        external_task_id="load_dim_geography",
+        execution_date_fn=lambda dt: dt.replace(hour=3, minute=0, second=0, microsecond=0),
+        mode="reschedule",
+        poke_interval=60,
+        timeout=3600,
+    )
+
     extract_task = PythonOperator(task_id="extract_dim_customer", python_callable=extract)
     transform_task = PythonOperator(task_id="transform_dim_customer", python_callable=transform)
     load_task = PythonOperator(task_id="load_dim_customer", python_callable=load)
 
-    extract_task >> transform_task >> load_task
+    wait_for_geography >> extract_task >> transform_task >> load_task

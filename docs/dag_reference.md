@@ -25,6 +25,42 @@ All dims must run before the fact. Dependencies:
 
 ---
 
+## Cross-DAG Dependency Enforcement
+
+Two DAGs perform a live PostgreSQL lookup during their `transform` task against a dimension table that must already be fully loaded. To prevent a race condition where the transform hits an empty or mid-reload dim, an `ExternalTaskSensor` is inserted as the first task in each dependent DAG.
+
+| Dependent DAG | Sensor task | Waits for | Why |
+|---|---|---|---|
+| `etl_dim_customer` | `wait_for_dim_geography` | `etl_dim_geography.load_dim_geography` | `transform` queries `dim.dim_geography` for `geography_key` lookup |
+| `etl_fact_online_sales` | `wait_for_dim_payment_method` | `etl_dim_payment_method.load_dim_payment_method` | `transform` queries `dim.dim_payment_method` for `payment_method_key` lookup |
+
+### Sensor configuration
+
+Both sensors use `mode="reschedule"` so worker slots are released between polls (important for the hourly fact DAG).
+
+**`etl_dim_customer`** (runs `0 4 * * *`) maps its execution date to the 3am geography run of the same day:
+```python
+execution_date_fn=lambda dt: dt.replace(hour=3, minute=0, second=0, microsecond=0)
+```
+
+**`etl_fact_online_sales`** (runs `0 * * * *`) maps any hourly execution date back to the most recent Monday 2am payment_method run:
+```python
+def _last_payment_method_dt(dt):
+    days_back = dt.weekday()          # Mon=0 … Sun=6
+    candidate = (dt - timedelta(days=days_back)).replace(
+        hour=2, minute=0, second=0, microsecond=0
+    )
+    if candidate > dt:                # Monday before 2am → use previous week
+        candidate -= timedelta(weeks=1)
+    return candidate
+```
+
+### Direct-run mode
+
+`python app/main.py run --all` calls DAG functions directly in Python — sensors are not activated. Execution order is enforced by the `DAG_EXECUTION_ORDER` list in `app/main.py`.
+
+---
+
 ## Type Mapping
 
 Oracle NUMBER types → PostgreSQL: `NUMBER(1-3)=SMALLINT`, `NUMBER(5)=INTEGER`, `NUMBER(8)=INTEGER`, `NUMBER(10)=BIGINT`, `NUMBER(n,d)=NUMERIC(n,d)`, `VARCHAR2(n)=VARCHAR(n)`, `CHAR(n)=CHAR(n)`.
@@ -100,7 +136,7 @@ Oracle NUMBER types → PostgreSQL: `NUMBER(1-3)=SMALLINT`, `NUMBER(5)=INTEGER`,
 | File | `airflow/dags/etl_dim_geography.py` |
 | Target | `dim.dim_geography` |
 | Source | `Person.Address` (distinct City+StateProvinceID) JOIN `Person.StateProvince` JOIN `Person.CountryRegion` |
-| Grain | Distinct `(City, StateProvinceCode, CountryRegionCode)` |
+| Grain | Distinct `(City, CountryRegionCode)` |
 | Key | `ROW_NUMBER()` surrogate; `CountryKey` = DENSE_RANK on country |
 | Key columns | `geography_key`, `country_key`, `city_key`, `sales_territory_key` FK |
 
@@ -128,7 +164,7 @@ Oracle NUMBER types → PostgreSQL: `NUMBER(1-3)=SMALLINT`, `NUMBER(5)=INTEGER`,
 | Source | `Sales.Customer` LEFT JOIN `Person.Person` OUTER APPLY address → StateProvince |
 | Key columns | `geography_key` FK (resolved via PG lookup); no `account_number`, no `full_name` |
 
-**FK resolution:** Transform queries `dim.dim_geography` in PG on `(city_name, state_province_code, country_code)`.
+**FK resolution:** Transform queries `dim.dim_geography` in PG on `(city_name, country_code)`.
 
 ---
 

@@ -34,8 +34,6 @@ def transform(**context):
             "country_code":        (row["CountryCode"] or "").strip(),
             "city_key":            int(row["CityKey"]),
             "city_name":           (row["CityName"] or "").strip(),
-            "state_province_code": row["StateProvinceCode"],
-            "state_province_name": row["StateProvinceName"],
             "sales_territory_key": int(row["SalesTerritoryKey"]) if row["SalesTerritoryKey"] is not None else None,
         }
         for row in raw_rows
@@ -53,12 +51,10 @@ def load(**context):
                 """
                 INSERT INTO dim.dim_geography
                     (geography_key, country_key, country_name, country_code,
-                     city_key, city_name, state_province_code, state_province_name,
-                     sales_territory_key)
+                     city_key, city_name, sales_territory_key)
                 VALUES
                     (%(geography_key)s, %(country_key)s, %(country_name)s,
                      %(country_code)s, %(city_key)s, %(city_name)s,
-                     %(state_province_code)s, %(state_province_name)s,
                      %(sales_territory_key)s)
                 """,
                 rows,

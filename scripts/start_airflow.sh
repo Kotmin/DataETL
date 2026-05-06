@@ -32,10 +32,15 @@ AIRFLOW_PID=$!
 echo "${AIRFLOW_PID}" > "${REPO_ROOT}/airflow/airflow.pid"
 
 echo "Waiting for API server to be ready..."
+HEALTHY=0
 for i in $(seq 1 30); do
-    curl -s http://localhost:8080/health > /dev/null 2>&1 && break
+    curl -s http://localhost:8080/api/v2/monitor/health > /dev/null 2>&1 && { HEALTHY=1; break; }
     sleep 2
 done
+if [ "${HEALTHY}" -eq 0 ]; then
+    echo "ERROR: Airflow did not become healthy after 60s. Check logs: ${LOG}"
+    exit 1
+fi
 
 echo ""
 echo "Airflow running  (PID ${AIRFLOW_PID})"

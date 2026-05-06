@@ -48,7 +48,6 @@ CREATE TABLE IF NOT EXISTS dim.dim_sales_territory (
 CREATE TABLE IF NOT EXISTS dim.dim_order_channel (
     order_channel_key  SMALLINT     NOT NULL,
     channel_name       VARCHAR(20)  NOT NULL,
-    online_flag        BOOLEAN      NOT NULL,
     CONSTRAINT pk_dim_order_channel PRIMARY KEY (order_channel_key)
 );
 
@@ -65,8 +64,6 @@ CREATE TABLE IF NOT EXISTS dim.dim_geography (
     country_code        CHAR(2)      NOT NULL,
     city_key            SMALLINT     NOT NULL,
     city_name           VARCHAR(30)  NOT NULL,
-    state_province_code VARCHAR(3),
-    state_province_name VARCHAR(50),
     sales_territory_key SMALLINT,
     CONSTRAINT pk_dim_geography PRIMARY KEY (geography_key)
 );
@@ -74,13 +71,11 @@ CREATE TABLE IF NOT EXISTS dim.dim_geography (
 CREATE TABLE IF NOT EXISTS dim.dim_delivery_method (
     delivery_method_key   SMALLINT        NOT NULL,
     delivery_method_name  VARCHAR(20)     NOT NULL,
-    ship_base             NUMERIC(19,4),
-    ship_rate             NUMERIC(19,4),
     CONSTRAINT pk_dim_delivery_method PRIMARY KEY (delivery_method_key)
 );
 
 CREATE TABLE IF NOT EXISTS fact.fact_online_sales (
-    order_key           VARCHAR(20)   NOT NULL,
+    order_key           VARCHAR(10)   NOT NULL,
     order_line_number   SMALLINT      NOT NULL,
     customer_key        BIGINT,
     product_key         INTEGER       NOT NULL,
@@ -97,5 +92,13 @@ CREATE TABLE IF NOT EXISTS fact.fact_online_sales (
     transaction_price   NUMERIC(7,2)  NOT NULL,
     delivery_cost       NUMERIC(7,2),
     product_cost        NUMERIC(8,2),
-    CONSTRAINT pk_fact_online_sales PRIMARY KEY (order_key, order_line_number)
+    CONSTRAINT pk_fact_online_sales          PRIMARY KEY (order_key, order_line_number),
+    CONSTRAINT fk_fact_customer              FOREIGN KEY (customer_key)        REFERENCES dim.dim_customer(customer_key),
+    CONSTRAINT fk_fact_product               FOREIGN KEY (product_key)         REFERENCES dim.dim_product(product_key),
+    CONSTRAINT fk_fact_sales_territory       FOREIGN KEY (sales_territory_key) REFERENCES dim.dim_sales_territory(sales_territory_key),
+    CONSTRAINT fk_fact_channel               FOREIGN KEY (channel_key)         REFERENCES dim.dim_order_channel(order_channel_key),
+    CONSTRAINT fk_fact_payment_method        FOREIGN KEY (payment_method_key)  REFERENCES dim.dim_payment_method(payment_method_key),
+    CONSTRAINT fk_fact_delivery_method       FOREIGN KEY (delivery_method_key) REFERENCES dim.dim_delivery_method(delivery_method_key),
+    CONSTRAINT fk_fact_order_date            FOREIGN KEY (order_date_key)      REFERENCES dim.dim_date(date_key),
+    CONSTRAINT fk_fact_ship_date             FOREIGN KEY (ship_date_key)       REFERENCES dim.dim_date(date_key)
 );

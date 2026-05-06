@@ -9,7 +9,7 @@ Type convention: `NUMBER(1-3)→SMALLINT`, `NUMBER(5)→INTEGER`, `NUMBER(8)→I
 | Attribute | Value |
 |---|---|
 | Target table | `dim.dim_date` |
-| Source system | MSSQL — `Sales.SalesOrderHeader` (date range) + Python generation |
+| Source system | MSSQL — `Sales.SalesOrderHeader` (date range, `OnlineOrderFlag = 1`) + Python generation |
 | Load pattern | Full reload (TRUNCATE + INSERT) |
 | Range | `MIN(OrderDate) − 1 year` to `MAX(ShipDate) + 1 year` |
 
@@ -23,7 +23,7 @@ Type convention: `NUMBER(1-3)→SMALLINT`, `NUMBER(5)→INTEGER`, `NUMBER(8)→I
 | `calendar_quarter` | SMALLINT NOT NULL | Generated | `(month - 1) // 3 + 1` |
 | `month_number_of_year` | SMALLINT NOT NULL | Generated | `date.month` |
 | `month_name` | VARCHAR(12) NOT NULL | Generated | Locale month name |
-| `week_number_of_year` | SMALLINT NOT NULL | Generated | `strftime("%W")` Monday-based |
+| `week_number_of_year` | SMALLINT NOT NULL | Generated | `strftime("%V")` ISO 8601 week (1–53, Monday-based; no week 0) |
 | `day_number_of_year` | SMALLINT NOT NULL | Generated | `date.timetuple().tm_yday` |
 | `day_number_of_month` | SMALLINT NOT NULL | Generated | `date.day` |
 | `day_number_of_week` | SMALLINT NOT NULL | Generated | `weekday() + 1` (1=Mon, 7=Sun) |
@@ -46,7 +46,6 @@ Type convention: `NUMBER(1-3)→SMALLINT`, `NUMBER(5)→INTEGER`, `NUMBER(8)→I
 |---|---|---|---|---|
 | `order_channel_key` | SMALLINT NOT NULL PK | `Sales.SalesOrderHeader` | `OnlineOrderFlag` | `1→1 (Online)`, `0→2 (In-Store)` |
 | `channel_name` | VARCHAR(20) NOT NULL | Derived | `OnlineOrderFlag` | `1→'Online'`, `0→'In-Store'` |
-| `online_flag` | BOOLEAN NOT NULL | Derived | `OnlineOrderFlag` | Cast to boolean |
 
 ---
 
@@ -91,8 +90,6 @@ JOIN Person.CountryRegion AS cr ON st.CountryRegionCode = cr.CountryRegionCode
 |---|---|---|---|---|
 | `delivery_method_key` | SMALLINT NOT NULL PK | `Purchasing.ShipMethod` | `ShipMethodID` | Natural key |
 | `delivery_method_name` | VARCHAR(20) NOT NULL | `Purchasing.ShipMethod` | `Name` | TRIM |
-| `ship_base` | NUMERIC(19,4) | `Purchasing.ShipMethod` | `ShipBase` | Direct cast |
-| `ship_rate` | NUMERIC(19,4) | `Purchasing.ShipMethod` | `ShipRate` | Direct cast |
 
 ---
 
@@ -121,21 +118,19 @@ JOIN Person.CountryRegion AS cr ON st.CountryRegionCode = cr.CountryRegionCode
 |---|---|
 | Target table | `dim.dim_geography` |
 | Source system | MSSQL — `Person.Address` JOIN `Person.StateProvince` JOIN `Person.CountryRegion` |
-| Grain | Distinct `(City, StateProvinceCode, CountryRegionCode)` |
+| Grain | Distinct `(City, CountryRegionCode)` |
 | Load pattern | Full reload (TRUNCATE + INSERT) |
 
 ### Column Mapping
 
 | Target Column | Type | Source Table | Source Column | Transform |
 |---|---|---|---|---|
-| `geography_key` | SMALLINT NOT NULL PK | Computed | `(City, StateProvinceID)` DISTINCT | `ROW_NUMBER() OVER (ORDER BY CountryCode, StateCode, City)` |
+| `geography_key` | SMALLINT NOT NULL PK | Computed | `(City, CountryRegionCode)` DISTINCT | `ROW_NUMBER() OVER (ORDER BY CountryCode, City)` |
 | `country_key` | SMALLINT NOT NULL | Computed | `CountryRegionCode` | `DENSE_RANK() OVER (ORDER BY CountryRegionCode)` |
 | `country_name` | VARCHAR(50) NOT NULL | `Person.CountryRegion` | `Name` | TRIM |
 | `country_code` | CHAR(2) NOT NULL | `Person.StateProvince` | `CountryRegionCode` | TRIM |
 | `city_key` | SMALLINT NOT NULL | Computed | same as `geography_key` | Equals `geography_key` (grain is city-scoped) |
 | `city_name` | VARCHAR(30) NOT NULL | `Person.Address` | `City` | TRIM |
-| `state_province_code` | VARCHAR(3) | `Person.StateProvince` | `StateProvinceCode` | Direct |
-| `state_province_name` | VARCHAR(50) | `Person.StateProvince` | `Name` | Direct |
 | `sales_territory_key` | SMALLINT FK | `Person.StateProvince` | `TerritoryID` | FK → `dim.dim_sales_territory` |
 
 ### Join Strategy
@@ -146,7 +141,7 @@ JOIN Person.StateProvince AS sp ON a.StateProvinceID = sp.StateProvinceID
 JOIN Person.CountryRegion AS cr ON sp.CountryRegionCode = cr.CountryRegionCode
 ```
 
-**FK resolution in customer:** `etl_dim_customer.transform` queries `dim.dim_geography` at runtime on `(city_name, state_province_code, country_code)`. `etl_dim_geography` must run before `etl_dim_customer`.
+**FK resolution in customer:** `etl_dim_customer.transform` queries `dim.dim_geography` at runtime on `(city_name, country_code)`. `etl_dim_geography` must run before `etl_dim_customer`.
 
 ---
 
@@ -195,7 +190,7 @@ LEFT JOIN Production.ProductCategory    AS pc ON ps.ProductCategoryID    = pc.Pr
 | `customer_key` | BIGINT NOT NULL PK | `Sales.Customer` | `CustomerID` | Direct cast |
 | `first_name` | VARCHAR(25) NULLABLE | `Person.Person` | `FirstName` | NULL if no Person row |
 | `last_name` | VARCHAR(45) NULLABLE | `Person.Person` | `LastName` | NULL if no Person row |
-| `geography_key` | SMALLINT FK NULLABLE | PG lookup | `dim.dim_geography` | Resolved at transform time via `(city_name, state_province_code, country_code)`; NULL if no address |
+| `geography_key` | SMALLINT FK NULLABLE | PG lookup | `dim.dim_geography` | Resolved at transform time via `(city_name, country_code)`; NULL if no address |
 
 ### Address Resolution
 
@@ -228,7 +223,7 @@ TOP 1 by `AddressTypeID` selects a deterministic primary address per customer.
 
 | Target Column | Type | Source Table | Source Column | Transform |
 |---|---|---|---|---|
-| `order_key` | VARCHAR(20) NOT NULL PK1 | `Sales.SalesOrderHeader` | `SalesOrderNumber` | Direct (`"SO43659"` format) |
+| `order_key` | VARCHAR(10) NOT NULL PK1 | `Sales.SalesOrderHeader` | `SalesOrderNumber` | Direct (`"SO43659"` format) |
 | `order_line_number` | SMALLINT NOT NULL PK2 | Computed | `SalesOrderDetailID` | `ROW_NUMBER() OVER (PARTITION BY SalesOrderID ORDER BY SalesOrderDetailID)` |
 | `customer_key` | BIGINT NULLABLE | `Sales.SalesOrderHeader` | `CustomerID` | FK → `dim.dim_customer` |
 | `product_key` | INTEGER NOT NULL | `Sales.SalesOrderDetail` | `ProductID` | FK → `dim.dim_product` |
@@ -239,12 +234,27 @@ TOP 1 by `AddressTypeID` selects a deterministic primary address per customer.
 | `order_date_key` | INTEGER NOT NULL | `Sales.SalesOrderHeader` | `OrderDate` | `YYYYMMDD` integer; FK → `dim.dim_date` |
 | `ship_date_key` | INTEGER NULLABLE | `Sales.SalesOrderHeader` | `ShipDate` | `YYYYMMDD` integer; NULL if `ShipDate IS NULL` |
 | `quantity` | SMALLINT NOT NULL | `Sales.SalesOrderDetail` | `OrderQty` | Direct cast |
-| `catalog_price` | NUMERIC(7,2) NOT NULL | `Sales.SalesOrderDetail` | `UnitPrice` | `round(UnitPrice, 2)` |
+| `catalog_price` | NUMERIC(7,2) NOT NULL | `Sales.SalesOrderDetail` | `UnitPrice` | `round(UnitPrice, 2)` — **non-additive**; use AVG or as a filter, not SUM |
 | `discount_amount` | NUMERIC(7,2) NOT NULL | Computed | `UnitPrice`, `UnitPriceDiscount` | `round(UnitPrice × UnitPriceDiscount, 2)` |
-| `discount_pctg` | SMALLINT NOT NULL | Computed | `UnitPriceDiscount` | `round(UnitPriceDiscount × 100)` as integer % |
-| `transaction_price` | NUMERIC(7,2) NOT NULL | Computed | `UnitPrice`, `UnitPriceDiscount` | `round(UnitPrice × (1 − UnitPriceDiscount), 2)` |
+| `discount_pctg` | SMALLINT NOT NULL | Computed | `UnitPriceDiscount` | `round(UnitPriceDiscount × 100)` as integer % — **non-additive**; rounded to nearest %, use AVG not SUM |
+| `transaction_price` | NUMERIC(7,2) NOT NULL | Computed | `UnitPrice`, `UnitPriceDiscount` | `round(UnitPrice × (1 − UnitPriceDiscount), 2)` — **non-additive**; multiply by `quantity` first to get line revenue |
 | `delivery_cost` | NUMERIC(7,2) NOT NULL | Computed | `Freight`, `LineTotal`, `SubTotal` | `round(Freight × LineTotal / OrderSubTotal, 2)`; proportional per line |
 | `product_cost` | NUMERIC(8,2) NOT NULL | OUTER APPLY | `ProductCostHistory.StandardCost` | Effective-date lookup; fallback `Production.Product.StandardCost`; widened from spec NUMBER(5,2) — AW bikes exceed 999.99 |
+
+### FK Constraints
+
+| Constraint | Fact Column | References |
+|---|---|---|
+| `fk_fact_customer` | `customer_key` | `dim.dim_customer(customer_key)` — NULLABLE |
+| `fk_fact_product` | `product_key` | `dim.dim_product(product_key)` — NOT NULL |
+| `fk_fact_sales_territory` | `sales_territory_key` | `dim.dim_sales_territory(sales_territory_key)` — NULLABLE |
+| `fk_fact_channel` | `channel_key` | `dim.dim_order_channel(order_channel_key)` — NOT NULL |
+| `fk_fact_payment_method` | `payment_method_key` | `dim.dim_payment_method(payment_method_key)` — NULLABLE |
+| `fk_fact_delivery_method` | `delivery_method_key` | `dim.dim_delivery_method(delivery_method_key)` — NULLABLE |
+| `fk_fact_order_date` | `order_date_key` | `dim.dim_date(date_key)` — NOT NULL |
+| `fk_fact_ship_date` | `ship_date_key` | `dim.dim_date(date_key)` — NULLABLE |
+
+All dims must be loaded before the fact. Dim TRUNCATEs use `CASCADE` which propagates to this table.
 
 ### Join Strategy
 

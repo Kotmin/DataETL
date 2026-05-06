@@ -38,7 +38,7 @@ def generate_and_load(**_):
             "calendar_quarter":     (current.month - 1) // 3 + 1,
             "month_number_of_year": current.month,
             "month_name":           _MONTH_NAMES[current.month - 1],
-            "week_number_of_year":  int(current.strftime("%W")),
+            "week_number_of_year":  int(current.strftime("%V")),
             "day_number_of_year":   current.timetuple().tm_yday,
             "day_number_of_month":  current.day,
             "day_number_of_week":   current.weekday() + 1,
@@ -50,7 +50,7 @@ def generate_and_load(**_):
     pg = pg_conn(PGParams.from_env())
     try:
         with pg.cursor() as cur:
-            cur.execute("TRUNCATE TABLE dim.dim_date")
+            cur.execute("TRUNCATE TABLE dim.dim_date CASCADE")
             cur.executemany(
                 """INSERT INTO dim.dim_date VALUES
                    (%(date_key)s,%(full_date)s,%(calendar_year)s,%(calendar_quarter)s,
