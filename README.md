@@ -13,6 +13,8 @@ A reproducible ETL lab that demonstrates OLTP → dimensional modeling using Adv
 
 The AdventureWorks `.bak` file is **not included** in this repository (too large for Git). You must download it into `db-seed/` before running bootstrap.
 
+> **Important:** download the **OLTP** edition (`AdventureWorks2025.bak`), not the Data Warehouse edition (`AdventureWorksDW2025.bak`). The lab depends on the normalized transactional schema.
+
 Official install guide: https://learn.microsoft.com/en-us/sql/samples/adventureworks-install-configure?view=sql-server-ver17&tabs=ssms
 
 ```bash
