@@ -1,6 +1,6 @@
 *.bak
 scripts/*.csv
-superpowers/plans/*
+docs/superpowers/
 .venv/
 .env
 airflow/airflow.db
