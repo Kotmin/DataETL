@@ -9,13 +9,16 @@ echo "=== AdventureWorks ETL Lab — Bootstrap ==="
 # ── 1. System dependencies ─────────────────────────────────────────────────
 echo "[1/6] Checking system dependencies..."
 
+UBUNTU_CODENAME=$(lsb_release -cs 2>/dev/null || (. /etc/os-release && echo "${VERSION_CODENAME}"))
+UBUNTU_VERSION=$(lsb_release -rs 2>/dev/null || (. /etc/os-release && echo "${VERSION_ID}"))
+
 if ! dpkg -s msodbcsql18 > /dev/null 2>&1; then
-    echo "  Installing Microsoft ODBC Driver 18 for SQL Server..."
+    echo "  Installing Microsoft ODBC Driver 18 for SQL Server (Ubuntu ${UBUNTU_VERSION} / ${UBUNTU_CODENAME})..."
     curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
         | sudo gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
 
     echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-prod.gpg] \
-https://packages.microsoft.com/ubuntu/24.04/prod noble main" \
+https://packages.microsoft.com/ubuntu/${UBUNTU_VERSION}/prod ${UBUNTU_CODENAME} main" \
         | sudo tee /etc/apt/sources.list.d/mssql-release.list > /dev/null
 
     sudo apt-get update -q
