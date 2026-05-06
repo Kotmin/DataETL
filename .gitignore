@@ -3,6 +3,7 @@ scripts/*.csv
 
 .venv/
 .env
+airflow/airflow.cfg
 airflow/airflow.db
 airflow/airflow.db-shm
 airflow/airflow.db-wal
