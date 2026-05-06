@@ -29,6 +29,10 @@ export AIRFLOW__EXECUTION_API__JWT_EXPIRATION_TIME=86400
 
 "${VENV}/airflow" db migrate
 
+pkill -f "airflow (standalone|api_server|scheduler|triggerer|dag-processor|serve-logs)" 2>/dev/null || true
+sleep 3
+rm -f "${REPO_ROOT}/airflow/airflow.pid"
+
 mkdir -p "${REPO_ROOT}/airflow/logs"
 
 echo "Starting Airflow standalone (api-server + scheduler + triggerer)..."
@@ -36,14 +40,28 @@ nohup "${VENV}/airflow" standalone > "${LOG}" 2>&1 &
 AIRFLOW_PID=$!
 echo "${AIRFLOW_PID}" > "${REPO_ROOT}/airflow/airflow.pid"
 
-echo "Waiting for API server to be ready..."
+echo "Waiting for all Airflow components to be healthy..."
 HEALTHY=0
-for i in $(seq 1 30); do
-    curl -s http://localhost:8080/api/v2/monitor/health > /dev/null 2>&1 && { HEALTHY=1; break; }
-    sleep 2
+for i in $(seq 1 36); do
+    HEALTH_JSON=$(curl -sf http://localhost:8080/api/v2/monitor/health 2>/dev/null || echo "")
+    if [ -n "${HEALTH_JSON}" ]; then
+        SCHED=$(echo "${HEALTH_JSON}" | "${VENV}/python" -c \
+            "import sys,json; d=json.load(sys.stdin); print((d.get('scheduler') or {}).get('status','unknown'))" 2>/dev/null || echo "unknown")
+        TRIG=$(echo "${HEALTH_JSON}" | "${VENV}/python" -c \
+            "import sys,json; d=json.load(sys.stdin); print((d.get('triggerer') or {}).get('status','unknown'))" 2>/dev/null || echo "unknown")
+        DAG=$(echo "${HEALTH_JSON}" | "${VENV}/python" -c \
+            "import sys,json; d=json.load(sys.stdin); print((d.get('dag_processor') or {}).get('status','unknown'))" 2>/dev/null || echo "unknown")
+        if [ "${SCHED}" = "healthy" ] && [ "${TRIG}" = "healthy" ] && [ "${DAG}" = "healthy" ]; then
+            HEALTHY=1; break
+        fi
+        echo "  [${i}/36] scheduler=${SCHED}  triggerer=${TRIG}  dag_processor=${DAG} — retrying in 5s..."
+    else
+        echo "  [${i}/36] API not responding yet — retrying in 5s..."
+    fi
+    sleep 5
 done
 if [ "${HEALTHY}" -eq 0 ]; then
-    echo "ERROR: Airflow did not become healthy after 60s. Check logs: ${LOG}"
+    echo "ERROR: Airflow components did not become healthy after 180s. Check: ${LOG}"
     exit 1
 fi
 

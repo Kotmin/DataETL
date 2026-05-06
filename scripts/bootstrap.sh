@@ -75,6 +75,7 @@ fi
 
 # ── 5. Airflow initialisation ───────────────────────────────────────────────
 echo "[5/6] Initialising Airflow..."
+pkill -f "airflow (standalone|api_server|scheduler|triggerer|dag-processor|serve-logs)" 2>/dev/null || true
 export AIRFLOW_HOME="${REPO_ROOT}/airflow"
 export AIRFLOW__CORE__DAGS_FOLDER="${REPO_ROOT}/airflow/dags"
 export AIRFLOW__CORE__EXECUTOR=LocalExecutor
