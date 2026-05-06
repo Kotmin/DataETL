@@ -62,6 +62,23 @@ All machine-specific paths in the file use `${AIRFLOW_HOME}`, which Airflow expa
 
 > **Production note:** in real deployments `airflow.cfg` should be excluded from version control (add to `.gitignore`). It is a generated file that may contain secrets. Use `AIRFLOW__SECTION__KEY` environment variables or a secrets backend instead.
 
+## Claude Code MCP Tool
+
+The `sql-query` MCP server (`tools/sql_query/`) lets Claude Code query both databases directly.
+
+`.claude/settings.json` is **not tracked in git** — it contains absolute paths specific to your machine. If you need the MCP tool, create `.claude/settings.json` and set the paths to match your repo location:
+
+```json
+{
+  "mcpServers": {
+    "sql-query": {
+      "command": "/absolute/path/to/DataETL/.venv/bin/python",
+      "args": ["/absolute/path/to/DataETL/tools/sql_query/server.py"]
+    }
+  }
+}
+```
+
 ## Architecture
 
 | Component | Technology | Location |
