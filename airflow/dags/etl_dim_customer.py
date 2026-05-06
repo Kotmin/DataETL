@@ -96,7 +96,7 @@ with DAG(
         task_id="wait_for_dim_geography",
         external_dag_id="etl_dim_geography",
         external_task_id="load_dim_geography",
-        execution_date_fn=lambda dt: dt.replace(hour=3, minute=0, second=0, microsecond=0),
+        execution_date_fn=lambda dt: dt.replace(hour=4, minute=0, second=0, microsecond=0),
         mode="reschedule",
         poke_interval=60,
         timeout=3600,

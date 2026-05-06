@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 from airflow import DAG
@@ -14,14 +14,8 @@ REPO_ROOT = Path(__file__).parents[2]
 EXTRACT_SQL = (REPO_ROOT / "sql" / "source" / "extract_fact_online_sales.sql").read_text()
 
 
-def _last_payment_method_dt(dt):
-    days_back = dt.weekday()
-    candidate = (dt - timedelta(days=days_back)).replace(
-        hour=2, minute=0, second=0, microsecond=0
-    )
-    if candidate > dt:
-        candidate -= timedelta(weeks=1)
-    return candidate
+def _payment_method_run_dt(dt):
+    return dt.replace(hour=4, minute=0, second=0, microsecond=0)
 
 
 def _to_date_key(val):
@@ -137,7 +131,7 @@ def load(**context):
 
 with DAG(
     dag_id="etl_fact_online_sales",
-    schedule="0 * * * *",
+    schedule="0 4 * * *",
     start_date=datetime(2025, 1, 1),
     catchup=False,
     tags=["fact", "sales"],
@@ -147,7 +141,7 @@ with DAG(
         task_id="wait_for_dim_payment_method",
         external_dag_id="etl_dim_payment_method",
         external_task_id="load_dim_payment_method",
-        execution_date_fn=_last_payment_method_dt,
+        execution_date_fn=_payment_method_run_dt,
         mode="reschedule",
         poke_interval=60,
         timeout=3600,
