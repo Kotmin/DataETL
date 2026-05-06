@@ -10,6 +10,7 @@ if [ ! -f "${REPO_ROOT}/.env" ]; then
     exit 1
 fi
 
+sed -i 's/\r//' "${REPO_ROOT}/.env"
 set -a
 source "${REPO_ROOT}/.env"
 set +a

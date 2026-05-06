@@ -44,6 +44,7 @@ if [ ! -f "${REPO_ROOT}/.env" ]; then
     echo "  Created .env from .env.example — review and update passwords if needed."
 fi
 
+sed -i 's/\r//' "${REPO_ROOT}/.env"
 set -a
 source "${REPO_ROOT}/.env"
 set +a
@@ -81,6 +82,8 @@ export AIRFLOW__CORE__LOAD_EXAMPLES=False
 export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN="sqlite:///${REPO_ROOT}/airflow/airflow.db"
 export AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS=True
 export AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS=admin:admin
+export AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=False
+export AIRFLOW__EXECUTION_API__JWT_EXPIRATION_TIME=86400
 
 "${VENV}/bin/airflow" db migrate 2>&1 | tail -5
 
