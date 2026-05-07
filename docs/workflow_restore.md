@@ -2,6 +2,8 @@
 
 How to restore this lab to a working state after a machine restart, crash, or partial execution failure.
 
+> **All commands in this guide must be run from the project root** (`DataETL/` directory).
+
 ## Quick Reference
 
 | Symptom | Fix |
@@ -18,7 +20,6 @@ How to restore this lab to a working state after a machine restart, crash, or pa
 ## A. Restart Docker Containers
 
 ```bash
-cd /home/kotmin/Coding/DataETL
 source .env
 docker compose -f docker/docker-compose.yml up -d
 ```
@@ -37,7 +38,6 @@ Both `sqlserver` and `postgres` should show `healthy`.
 ## B. Restart Airflow
 
 ```bash
-cd /home/kotmin/Coding/DataETL
 ./scripts/start_airflow.sh
 ```
 
@@ -56,7 +56,6 @@ rm -f airflow/airflow-webserver.pid airflow/airflow-scheduler.pid
 Use this when the SQL Server container started but the restore never completed (e.g., power cut mid-restore).
 
 ```bash
-cd /home/kotmin/Coding/DataETL
 docker compose -f docker/docker-compose.yml stop sqlserver
 docker compose -f docker/docker-compose.yml rm -f sqlserver
 docker volume rm datametl_sqlserver-data 2>/dev/null || \
@@ -77,14 +76,16 @@ The `sql-query` MCP server runs as a subprocess of Claude Code. It requires:
 
 If Claude Code can't reach the tool:
 ```bash
+REPO_ROOT=$(git -C . rev-parse --show-toplevel)
+
 # Verify venv
-/home/kotmin/Coding/DataETL/.venv/bin/python -c "import mcp, pyodbc, psycopg2; print('OK')"
+"$REPO_ROOT/.venv/bin/python" -c "import mcp, pyodbc, psycopg2; print('OK')"
 
 # Test manually (should return JSON)
-source /home/kotmin/Coding/DataETL/.env
+source "$REPO_ROOT/.env"
 MSSQL_CONN="DRIVER={ODBC Driver 18 for SQL Server};SERVER=localhost,1433;DATABASE=AdventureWorks2025;UID=sa;PWD=${MSSQL_SA_PASSWORD};TrustServerCertificate=yes;" \
 PG_CONN="postgresql://${PG_USER}:${PG_PASSWORD}@${PG_HOST}:${PG_PORT}/${PG_DB}" \
-/home/kotmin/Coding/DataETL/.venv/bin/python /home/kotmin/Coding/DataETL/tools/sql_query/server.py
+"$REPO_ROOT/.venv/bin/python" "$REPO_ROOT/tools/sql_query/server.py"
 ```
 
 Restart Claude Code after fixing — MCP servers are started at session open time.
@@ -97,15 +98,15 @@ If a ralph-loop session is orphaned (Claude Code session closed without completi
 
 ```bash
 # Find and inspect the state file
-cat /home/kotmin/Coding/DataETL/.claude/ralph-loop.local.md
+cat .claude/ralph-loop.local.md
 
 # If stale (no matching live Claude session), remove it
-rm /home/kotmin/Coding/DataETL/.claude/ralph-loop.local.md
+rm .claude/ralph-loop.local.md
 ```
 
 In worktrees:
 ```bash
-find /home/kotmin/Coding/DataETL -name "ralph-loop.local.md" -print
+find . -name "ralph-loop.local.md" -print
 # Review each, remove stale ones
 ```
 
@@ -116,8 +117,6 @@ find /home/kotmin/Coding/DataETL -name "ralph-loop.local.md" -print
 Wipes everything and starts from scratch. Use when all else fails.
 
 ```bash
-cd /home/kotmin/Coding/DataETL
-
 # 1. Tear down
 ./scripts/reset_env.sh
 
@@ -144,24 +143,20 @@ source .env
 If the entire execution state is lost and you need to resume work from the plan:
 
 ```bash
-# The plan is saved at:
-cat /home/kotmin/.claude/plans/we-want-to-work-glimmering-kahn.md
-
 # Check git log to see what was completed
 git log --oneline
 
 # Resume the next uncommitted step from the plan
 ```
 
-The plan file at `/home/kotmin/.claude/plans/we-want-to-work-glimmering-kahn.md` contains the full blocking dependency graph and implementation order. Match the last git commit to the implementation order table to find the next step.
+Match the last git commit to the implementation order table to find the next step.
 
 ---
 
 ## Environment Health Check (one-liner)
 
 ```bash
-cd /home/kotmin/Coding/DataETL && \
-  source .env && \
+source .env && \
   docker compose -f docker/docker-compose.yml ps && \
   pgrep -f "airflow webserver" > /dev/null && echo "Airflow:UP" || echo "Airflow:DOWN" && \
   .venv/bin/pytest tests/test_transform.py -q

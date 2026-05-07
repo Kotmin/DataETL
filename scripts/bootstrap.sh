@@ -44,6 +44,7 @@ if [ ! -f "${REPO_ROOT}/.env" ]; then
     echo "  Created .env from .env.example — review and update passwords if needed."
 fi
 
+sed -i 's/\r//' "${REPO_ROOT}/.env"
 set -a
 source "${REPO_ROOT}/.env"
 set +a
@@ -74,13 +75,21 @@ fi
 
 # ── 5. Airflow initialisation ───────────────────────────────────────────────
 echo "[5/6] Initialising Airflow..."
+pkill -f "airflow (standalone|api_server|scheduler|triggerer|dag-processor|serve-logs)" 2>/dev/null || true
 export AIRFLOW_HOME="${REPO_ROOT}/airflow"
 export AIRFLOW__CORE__DAGS_FOLDER="${REPO_ROOT}/airflow/dags"
+export AIRFLOW__CORE__EXECUTOR=LocalExecutor
 export AIRFLOW__CORE__LOAD_EXAMPLES=False
-export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN="sqlite:////${REPO_ROOT}/airflow/airflow.db"
+export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN="sqlite:///${REPO_ROOT}/airflow/airflow.db?timeout=30"
 export AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS=True
+export AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS=admin:admin
+export AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=False
+export AIRFLOW__EXECUTION_API__JWT_EXPIRATION_TIME=86400
+export AIRFLOW__CORE__PARALLELISM=8
+export AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG=4
 
 "${VENV}/bin/airflow" db migrate 2>&1 | tail -5
+"${VENV}/bin/python" -c "import sqlite3; c=sqlite3.connect('${REPO_ROOT}/airflow/airflow.db'); c.execute('PRAGMA journal_mode=WAL'); c.close()"
 
 # ── 6. Verify connections ───────────────────────────────────────────────────
 echo "[6/6] Verifying database connections..."

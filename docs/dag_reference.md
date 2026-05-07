@@ -36,23 +36,20 @@ Two DAGs perform a live PostgreSQL lookup during their `transform` task against 
 
 ### Sensor configuration
 
-Both sensors use `mode="reschedule"` so worker slots are released between polls (important for the hourly fact DAG).
+Both sensors use `mode="reschedule"` so worker slots are released between polls.
 
-**`etl_dim_customer`** (runs `0 4 * * *`) maps its execution date to the 3am geography run of the same day:
+All DAGs now run at `0 4 * * *`. Each sensor maps its execution date to the same
+day's 4am run of the upstream DAG.
+
+**`etl_dim_customer`** uses an inline lambda (geography runs at the same hour):
 ```python
-execution_date_fn=lambda dt: dt.replace(hour=3, minute=0, second=0, microsecond=0)
+execution_date_fn=lambda dt: dt.replace(hour=4, minute=0, second=0, microsecond=0)
 ```
 
-**`etl_fact_online_sales`** (runs `0 * * * *`) maps any hourly execution date back to the most recent Monday 2am payment_method run:
+**`etl_fact_online_sales`** uses a named function for explicitness:
 ```python
-def _last_payment_method_dt(dt):
-    days_back = dt.weekday()          # Mon=0 … Sun=6
-    candidate = (dt - timedelta(days=days_back)).replace(
-        hour=2, minute=0, second=0, microsecond=0
-    )
-    if candidate > dt:                # Monday before 2am → use previous week
-        candidate -= timedelta(weeks=1)
-    return candidate
+def _payment_method_run_dt(dt):
+    return dt.replace(hour=4, minute=0, second=0, microsecond=0)
 ```
 
 ### Direct-run mode

@@ -37,7 +37,8 @@ cd DataETL
 mkdir -p db-seed && curl -L -o db-seed/AdventureWorks2025.bak \
   https://github.com/Microsoft/sql-server-samples/releases/download/adventureworks/AdventureWorks2025.bak
 
-# 3. Bootstrap (installs ODBC driver, creates venv, starts containers)
+# 3. Bootstrap — creates .env from .env.example, installs deps, starts containers
+#    Afterwards review .env if you changed any passwords from the defaults
 ./scripts/bootstrap.sh
 
 # 4. Start Airflow
@@ -51,6 +52,31 @@ mkdir -p db-seed && curl -L -o db-seed/AdventureWorks2025.bak \
 source .env
 .venv/bin/pytest tests/test_transform.py tests/test_extract.py -v
 .venv/bin/pytest tests/test_load.py -v -m integration
+```
+
+## Airflow Configuration
+
+`airflow/airflow.cfg` is committed to this repository intentionally — it is a teaching artifact that makes Airflow settings visible and editable without students having to locate generated files.
+
+All machine-specific paths in the file use `${AIRFLOW_HOME}`, which Airflow expands at startup from the environment variable set by `start_airflow.sh`. No manual editing is needed after cloning.
+
+> **Production note:** in real deployments `airflow.cfg` should be excluded from version control (add to `.gitignore`). It is a generated file that may contain secrets. Use `AIRFLOW__SECTION__KEY` environment variables or a secrets backend instead.
+
+## Claude Code MCP Tool
+
+The `sql-query` MCP server (`tools/sql_query/`) lets Claude Code query both databases directly.
+
+`.claude/settings.json` is **not tracked in git** — it contains absolute paths specific to your machine. If you need the MCP tool, create `.claude/settings.json` and set the paths to match your repo location:
+
+```json
+{
+  "mcpServers": {
+    "sql-query": {
+      "command": "/absolute/path/to/DataETL/.venv/bin/python",
+      "args": ["/absolute/path/to/DataETL/tools/sql_query/server.py"]
+    }
+  }
+}
 ```
 
 ## Architecture
