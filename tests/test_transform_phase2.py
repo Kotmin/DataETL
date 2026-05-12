@@ -1,4 +1,7 @@
+import json
+import os
 import sys
+import tempfile
 from datetime import datetime, date
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -49,17 +52,40 @@ def _run_customer(raw_rows):
 
 
 def _run_fact(raw_rows):
+    class _FakeXComFileBased:
+        def __init__(self):
+            self._store = {}
+
+        def xcom_push(self, key, value):
+            self._store[key] = value
+
+        def xcom_pull(self, task_ids, key):
+            return self._store.get(key)
+
     mock_cursor = MagicMock()
     mock_cursor.fetchall.return_value = list(_PM_LOOKUP.items())
     mock_conn = MagicMock()
     mock_conn.cursor.return_value.__enter__ = lambda s: mock_cursor
     mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
-    ti = _FakeXCom(raw_rows)
+
+    ti = _FakeXComFileBased()
+
+    raw_tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, prefix="test_raw_")
+    json.dump(raw_rows, raw_tmp, default=str)
+    raw_tmp.close()
+    ti.xcom_push(key="raw_rows_path", value=raw_tmp.name)
+
     with patch.object(_fact_module, "pg_conn", return_value=mock_conn), \
          patch.object(_fact_module, "PGParams"):
         _fact_module.transform(**{"ti": ti})
-    assert ti._pushed[0] == "transformed_rows"
-    return ti._pushed[1]
+
+    assert "transformed_rows_path" in ti._store
+    out_path = ti._store["transformed_rows_path"]
+    try:
+        with open(out_path) as f:
+            return json.load(f)
+    finally:
+        os.unlink(out_path)
 
 
 _TERRITORY_RAW = [
