@@ -1,6 +1,7 @@
 # AdventureWorks ETL Teaching Lab
 
 A reproducible ETL lab that demonstrates OLTP → dimensional modeling using AdventureWorks, Apache Airflow, and PostgreSQL.
+<img width="3762" height="1911" alt="big_dataflow_chart(3)" src="https://github.com/user-attachments/assets/c930ce70-9e1a-4a0a-b5b9-b77c0eac7af5" />
 
 ## Prerequisites
 
