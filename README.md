@@ -85,7 +85,7 @@ The `sql-query` MCP server (`tools/sql_query/`) lets Claude Code query both data
 |---|---|---|
 | Source DB | SQL Server 2022 (Docker, port 1433) | AdventureWorks2025 |
 | Warehouse | PostgreSQL 16 (Docker, port 5432) | `dim` schema |
-| Orchestrator | Apache Airflow 2.9.3 (local) | http://localhost:8080 |
+| Orchestrator | Apache Airflow 3.2.0 (local) | http://localhost:8080 |
 | SQL MCP Tool | Python stdio MCP server | `tools/sql_query/` |
 
 ## Repository Structure
