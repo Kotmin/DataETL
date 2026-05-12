@@ -140,3 +140,17 @@ source .env
 - `docs/etl_plan.md` — execution plan and blocking dependency graph
 - `docs/workflow_restore.md` — restore guide for machine restarts and failures
 - `PRD.md` — full product requirements
+
+## Contributing
+
+Branch off `dev`. Open PRs against `main` only from `dev`.
+
+**Commits** must follow [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): description`. One atomic commit per file or logical group.
+
+**Tests** — run the unit suite before pushing:
+
+```bash
+.venv/bin/pytest tests/test_transform.py tests/test_transform_phase2.py -v
+```
+
+**ETL changes** — any DAG added, removed, or modified requires updating `docs/dag_reference.md` (canonical DAG catalog).
